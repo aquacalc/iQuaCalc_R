@@ -1,0 +1,68 @@
+/* custom CSS */
+
+/* see: http://rstudio.github.io/shinydashboard/appearance.html */
+
+.home {
+  color: white;
+  height: 100;
+}
+
+.main-header .logo {
+/**  font-family: "Georgia", Times, "Times New Roman", serif; */
+  font-family: "Parkavenue", comic;
+  font-weight: bold;
+  font-size: 24px;
+}
+
+code {
+  color: blue;
+  background-color: transparent;
+}
+
+.shiny-text-output {
+  color: blue;
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.formula {
+  border-top: 1px solid orange;
+  border-bottom: 1px solid orange;
+  padding-top: 1px; 
+  padding-bottom: 1px;
+  margin-top: 1px; 
+  margin-bottom: 1px; 
+}
+
+
+/* http://stackoverflow.com/questions/24212329/conditionalpanel-and-renderimage-shiny?rq=1 */
+img {
+  border: 1;
+  max-width: 100%;
+}
+
+.conversion-input {
+/*  background-color: whitesmoke; */
+  border-top: 1px solid orange;
+  border-bottom: 1px solid orange;
+  padding-top: 15px; 
+/*  padding-bottom:1px; **/
+}
+
+.conversion-rb {
+ vertical-align: text-top;
+ padding-left: 30px;
+/*   background-color: whitesmoke; */
+}
+
+/*
+.content-wrapper {
+  background-color: red;
+}
+
+.content-wrapper,
+.right-side {
+  background-color: red;
+}
+*/

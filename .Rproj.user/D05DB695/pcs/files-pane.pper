@@ -1,0 +1,13 @@
+{
+    "path" : "~/Documents/Documents/R Projects/WQ_iQuaCalc_Lite_0.3/modules",
+    "sortOrder" : [
+        {
+            "ascending" : true,
+            "columnIndex" : 2
+        },
+        {
+            "ascending" : true,
+            "columnIndex" : 1
+        }
+    ]
+}

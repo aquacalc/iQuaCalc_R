@@ -1,0 +1,22 @@
+[KNicks-MBP:WQ_iQuaCalc_Lite_0.3 nickstaresinic$ pip --version
+bash: pip: command not found
+]0;~/Documents/Documents/R Projects/WQ_iQuaCalc_Lite_0.3Nicks-MBP:WQ_iQuaCalc_Lite_0.3 nickstaresinic$ which python
+/usr/bin/python
+]0;~/Documents/Documents/R Projects/WQ_iQuaCalc_Lite_0.3Nicks-MBP:WQ_iQuaCalc_Lite_0.3 nickstaresinic$ python --version
+Python 2.7.10
+]0;~/Documents/Documents/R Projects/WQ_iQuaCalc_Lite_0.3Nicks-MBP:WQ_iQuaCalc_Lite_0.3 nickstaresinic$ python --version[4Pwhich pythonpip --version
+pip 9.0.1 from /Library/Python/2.7/site-packages/pip-9.0.1-py2.7.egg (python 2.7)
+brew -- [Kversion
+bash: brew: command not found
+]0;~/Documents/Documents/R Projects/WQ_iQuaCalc_Lite_0.3[?1034hNicks-MBP:WQ_iQuaCalc_Lite_0.3 nickstaresinic$ pwd
+/Users/nickstaresinic/Documents/Documents/R Projects/WQ_iQuaCalc_Lite_0.3
+]0;~/Documents/Documents/R Projects/WQ_iQuaCalc_Lite_0.3Nicks-MBP:WQ_iQuaCalc_Lite_0.3 nickstaresinic$ ls
+CarbCalc.R				modal_dlgs
+WQ iQuaCalc Lite - III - 17.Rproj	modules
+WQ_iQuaCalc_Lite_0.3.Rproj		rsconnect
+adjustReagents.R			server.R
+bodyHTML.R				sidebarHelper.R
+bodyHelper.R				thumb-up.ico
+converters				ui.R
+global.R				www
+]0;~/Documents/Documents/R Projects/WQ_iQuaCalc_Lite_0.3[?1034hNicks-MBP:WQ_iQuaCalc_Lite_0.3 nickstaresinic$ 

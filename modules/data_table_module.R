@@ -1,0 +1,126 @@
+# datatable module functions for
+# "iQuaCalc (Lite) salinity module.R"
+
+
+datatableModuleInput <- function(id, col_width, font_size) {
+  
+  ns <- NS(id)
+  
+  tagList(
+    
+    column(width = col_width,
+           
+           div(DT::dataTableOutput(ns('dt')), 
+               # style = 'font-size:130%')
+               style = paste0('font-size:', font_size, '%'))
+    )
+  )
+}
+
+
+
+datatableModule <- function(input, output, session, 
+                            my_df, 
+                            num_rows,
+                            num_cols,
+                            col_names = NULL) {
+  
+  ns <- session$ns
+  
+  
+  proxy_dt_data = dataTableProxy(ns('dt'))
+  
+  #   # see: http://www.datatables.net/reference/option/dom
+  #   # dom = 'tp' option for table + pagination only
+  #   options = list(dom = 'tp', 'bSort' = F, pageLength = 5)
+  
+  # *** NB: replaceData doesn't work in module namespace ***
+  # see: https://github.com/rstudio/DT/issues/359 for workaround 
+  observe({
+    
+    # track the selected and clicked table cell
+    
+    # cat('input$dt_cell_clicked ...\n')
+    # print(input$dt_cell_clicked)
+    # cat('-------\n')
+    # cat('input$dt_cells_selected ...\n')
+    # print(input$dt_cells_selected)
+    # my_cell_data()
+    # cat('-------\n\n')
+    
+    req(my_df(), cancelOutput = T)
+    
+    # cat('\n\n\n+++++++++++++\n')
+    # cat('ici...\n')
+    # print(my_df())
+    # cat('+++++++++++++\n\n\n')
+    
+    # replaceData(proxy_dt_data, my_df()$df, rownames = F, resetPaging = FALSE)
+    dataTableAjax(session, my_df()$df, rownames = F, outputId = 'dt')
+    reloadData(proxy_dt_data, resetPaging = FALSE)
+  })
+  
+  
+  output$dt <- DT::renderDataTable(
+    
+    datatable( isolate(my_df()$df),
+    # datatable( my_df()$df,
+               
+               # colnames = NULL,
+               colnames = col_names,
+               
+               rownames = F,
+               
+               # ================== ADD THIS, no? ====================
+               # see: https://yihui.shinyapps.io/DT-selection/
+               selection = list(mode = 'single', target = 'cell'),
+               # selection = list(mode = 'single', target = 'row'),
+               # ==================== ADD THIS? ======================
+               
+               options = list(dom = 't',
+                              'bSort' = F,
+                              'bInfo' = F,
+                              pageLength = num_rows,
+                              
+                              # columnDefs = list(list(targets = 2, visible = F)),
+                              columnDefs = list(list(targets = num_cols - 1, visible = F),
+                                                list(className = 'dt-right', targets = 0)),
+                              
+                              initComplete = JS(
+                                "function(settings, json) {",
+                                "$(this.api().table().header()).css({'background-color': 'lightblue', 'color': '#000'});",
+                                "}")
+               ) 
+    )
+    %>%
+      # formatStyle(isolate(df_temp()$h), 'h',
+      # formatStyle('h', target = 'row', lineHeight='85%',
+      formatStyle('h', target = 'row', 
+                  # backgroundColor = styleEqual(c(0, 1), c('#6699FF', '#FFFF66')),
+                  fontWeight = styleEqual(c(0, 1), c('normal', 'bold')))
+  )
+  
+  
+  # capture table cell clicks ----
+  
+  # my_cell_data <- reactive({
+  my_cell_data <- eventReactive(c(input$dt_cells_selected,
+                                       my_df()$df), {
+
+                                         # cat('input$dt_cell_clicked ...\n')
+                                         # print(input$dt_cell_clicked)
+                                         # cat('-------\n')
+                                         # cat('input$dt_cells_selected ...\n')
+                                         # print(input$dt_cells_selected)
+                                         # cat('=======\n\n')
+
+                          clicked_data_list <- list(info     = input$dt_cell_clicked,
+                                                    selected = input$dt_cells_selected)
+
+                          clicked_data_list
+                        })
+
+  return(my_cell_data)
+  
+}
+

@@ -1,0 +1,2164 @@
+# converter_gasses.R used in iQuaCalc (Lite) Shiny app
+
+
+# NB: To calc for a pressure different from ~760 mm Hg,
+#     add @param bp_ic in ic_in_atm, or modify my_mV accordingly...??
+#
+# YES! Thus, conversions to mL/L in Colt's book are wrong and
+#      those in Boyd's book (& the Loligo online calculator) are correct
+adjustMolarVolume <- function(molarVolume, temp, bp_ic) {
+  # adjust for non-standard temperature
+  adjustedMolarVolume <- molarVolume * (temp / 273.15)
+  adjustedMolarVolume <- adjustedMolarVolume * (1 / bp_ic)
+  
+  cat('adjustedMolarVolume = ', adjustedMolarVolume, '\n')
+  
+  return(adjustedMolarVolume)
+}
+
+
+# ---- GENERAL GAS TO I.C. & ALL UNITS ----
+
+# **** Convert Conc to-from pXm
+# * To convert the dissolved gas conc from mg/l to atm, χ ∗ (BP − vp)…
+# χ ∗ (BP − vp) = C * MVC / (β * 1000.0 * MW)					… if C is in mg/L
+# * To convert the dissolved gas conc from mg/l to mm Hg, χ ∗ (BP − vp)…
+# χ ∗ (BP − vp) = C * 760 * MVC / (β * 1000.0 * MW) 	… if C is in mg/L
+
+# > (760 * MV_O2) * 3.4953 [mg/L] / (calcBunsen_O2(273.15 + 30, 0) * 1000.0 * MW_O2)
+# [1] 70.67006 mm Hg
+# > (MV_O2) * 3.4953 [mg/L] / (calcBunsen_O2(273.15 + 30, 0) * 1000.0 * MW_O2)
+# [1] 0.09298692 atm
+
+# from "GasField.m" & "GasCalc.m"
+# convert input value to Internal Calc Units: ** μmol/kg ** (OLD: mmol/kg)
+# gasUnitsList <- c('atm', 'mm Hg', 'mbar', 'psi', 'torr',
+#                   'mg/kg', 'mg/L', 
+#                   'mL/L', 
+#                   "μmol/kg", "μmol/L", "mmol/kg", "mmol/L")
+# @rho in IC Units -- g/L
+
+# calcGasIcUnits <- function(gasType, gasVal, gasUnits, temp, sal) {
+# AND
+# calcBunsen(gasType, temp, sal)
+
+# ** μmol/kg == I.C. Units
+calcGasToIcUnits <- function(gas_type, gasVal, gasUnits, 
+                             temp, sal, bp) {
+# calcGasToIcUnits <- function(gas_type, gasVal, gasUnits, 
+#                              temp, sal) {
+  
+  # g/L divided by 1000 g/kg --> kg/L
+  rho <- calcRho(temp, sal) / 1000.0
+  
+  my_gas_col_idx <- which(names(real_gas_vals) == gas_type)
+  
+  my_mW <- real_gas_vals %>% filter(code == 'mw') %>% dplyr::select(my_gas_col_idx)
+  my_mW <- as.vector(my_mW[, 1], mode = 'numeric')
+  my_mV <- real_gas_vals %>% filter(code == 'mv') %>% dplyr::select(my_gas_col_idx)
+  my_mV <- as.vector(my_mV[, 1], mode = 'numeric')
+  
+  # ADJUST MOLAR VOLUME for non-STP conditions
+  my_mV <- adjustMolarVolume(my_mV, temp, bp)
+  
+  # cat(gas_type, ': ', my_mW, ' & ', my_mV, '\n')
+  
+  # NB: molar volume O2 ... Divide 31.9988 g/mol by 1.429 g/L = 22.3924 L/mol
+  
+  # MW_O2 <- 31.9988    # 31.9988 g O2 / mole O2
+  
+  # --- from PRESSURE units to I.C. O2
+  
+  if('atm' == gasUnits) {
+    # [mol/kg] *[L/mol]  * [kg/L] / [L(gas) / [L(soln) * atm]] --> atm
+    # > 0.00023605 * MV_O2 * 0.99556 / calcBunsen_O2(273.15 + 30.3, 0)
+    # [1] 0.2009338
+    
+    ic_in_atm <- 10^6 * (gasVal * calcBunsen(gas_type, temp, sal)) / (my_mV * rho)
+    return(ic_in_atm)
+  }
+  
+  if('mm Hg (torr)' == gasUnits) {
+    ic_in_atm <- 10^6 * ((gasVal / 759.999952) * calcBunsen(gas_type, temp, sal)) / (my_mV * rho)
+    return(ic_in_atm)
+  }
+  
+  if('mbar' == gasUnits) {
+    ic_in_atm <- 10^6 * ((gasVal / (1.01325 * 1000.0)) * calcBunsen(gas_type, temp, sal)) / (my_mV * rho)
+    return(ic_in_atm)
+  }
+  
+  if('psi' == gasUnits) {
+    ic_in_atm <- 10^6 * ((gasVal / 14.696) * calcBunsen(gas_type, temp, sal)) / (my_mV * rho)
+    return(ic_in_atm)
+  }
+  
+  if('in Hg' == gasUnits) {
+    ic_in_atm <- 10^6 * ((gasVal / (0.03937007874 * 759.999952)) * calcBunsen(gas_type, temp, sal)) / (my_mV * rho)
+    return(ic_in_atm)
+  }
+  
+  if('in H2O' == gasUnits) {
+    ic_in_atm <- 10^6 * ((gasVal / 406.807) * calcBunsen(gas_type, temp, sal)) / (my_mV * rho)
+    return(ic_in_atm)
+  }
+  
+  # --- from MASS & VOLUME units to I.C. O2
+  
+  if('mg/kg' == gasUnits) {
+    return(gasVal / (my_mW * 0.001))      # (mmol/kg) * (mg/mmol) ** OR ** 
+                            # (μmol/kg) * (10^-3 mmol/μmol) * (mg/mmol)
+  }
+  
+  if('mg/L' == gasUnits) {
+    return(gasVal / (my_mW * rho * 0.001))
+  }
+  
+  if('mL/L' == gasUnits || 'mL/kg' == gasUnits) {
+    return(gasVal / (my_mV * rho * 0.001))
+  }
+  
+  # --- from MOLAR units to I.C. O2
+  
+  # ** μmol/kg == I.C. Units
+  if('μmol/kg' == gasUnits) {
+    return(gasVal)
+  }
+  
+  if('μmol/L' == gasUnits) {
+    return(gasVal / rho)
+  }
+  
+  if('mmol/kg' == gasUnits) {
+    return(gasVal * 1000.0)
+  }
+  
+  if('mmol/L' == gasUnits) {
+    return(gasVal * 1000.0 / rho)
+  }
+  
+}
+
+
+# @o2 in I.C. Unita -- mmol/kg OR MICRO-moles??
+# @rho in IC Units -- g/L
+
+# [CHECK]
+# > calcGasAllUnits('O2', 236.05, 'μmol/kg', 273.15 + 30.3, 0)
+# vals        units
+# 1    0.2009          atm
+# 2  152.7097 mm Hg (torr)
+# 3     7.520         mg/L
+# 4    5.2623         mL/L
+# 5    236.05      μmol/kg
+# 6     7.377        mg/kg
+# 7    5.2857        mL/kg
+# 8  203.5962         mbar
+# 9    2.9529          psi
+# 10   6.0122        in Hg
+# 11  81.7413       in H2O
+# 12   235.00       μmol/L
+# 13     0.24      mmol/kg
+# 14     0.23       mmol/L
+
+
+calcGasAllUnits <- function(gasType, gasVal, gasUnits, temp, sal, bp) {
+# calcGasAllUnits <- function(gasType, gasVal, gasUnits, temp, sal) {
+  
+  my_gas_col_idx <- which(names(real_gas_vals) == gasType)
+  
+  my_mW <- real_gas_vals %>% filter(code == 'mw') %>% dplyr::select(my_gas_col_idx)
+  my_mW <- as.vector(my_mW[, 1], mode = 'numeric')
+  
+  my_mV <- real_gas_vals %>% filter(code == 'mv') %>% dplyr::select(my_gas_col_idx)
+  
+  my_mV <- as.vector(my_mV[, 1], mode = 'numeric')
+  
+  # ADJUST MOLAR VOLUME for non-STP conditions
+  my_mV <- adjustMolarVolume(my_mV, temp, bp)
+  
+  o2_in_ic <- calcGasToIcUnits(gasType, gasVal, gasUnits, temp, sal, bp)
+  
+  # g/L divided by 1000 g/kg --> kg/L
+  rho <- calcRho(temp, sal) / 1000.0
+  
+  ic_in_atm <- 10^-6 * o2_in_ic * my_mV * rho / calcBunsen(gasType, temp, sal)
+  
+  micro_mol_kg <- round(o2_in_ic, 4)
+  micro_mol_L  <- round(o2_in_ic * rho, 4)
+  
+  mmol_kg <- round(o2_in_ic / 1000.0, 4)
+  mmol_L  <- round(o2_in_ic * rho / 1000.0, 4)
+  
+  mg_kg <- round(o2_in_ic * (my_mW  * 0.001), 5)
+  mg_L  <- round(o2_in_ic * (my_mW * rho * 0.001), 5)
+  
+  mL_L  <- round(o2_in_ic * (rho * my_mV * 0.001), 5)  # [μmol/kg] * [kg/L] * [mL/mmol] * [mmol/μmol]
+  mL_kg <- round(o2_in_ic * (my_mV * 0.001), 5)  # [μmol/kg] * [mL/mmol] * [mmol/μmol]
+  
+  atm  <- round(ic_in_atm, 5)
+  mmHg <- round(ic_in_atm * 759.999952, 5)
+  mbar <- round(ic_in_atm * (1.01325 * 1000.0), 5)
+  
+  psi   <- round(ic_in_atm * 14.696, 5)
+  inHg  <- round(ic_in_atm * (0.03937007874 * 759.999952), 5)
+  inH2O <- round(ic_in_atm * 406.807, 5)
+  
+  micro_mol_kg <- formatC(micro_mol_kg, format='f', digits=4)
+  micro_mol_L  <- formatC(micro_mol_L,  format='f', digits=4)
+  mmol_kg      <- formatC(mmol_kg,      format='f', digits=4) # NB: used in co2_dissolved_numeric_input.R
+  mmol_L       <- formatC(mmol_L,       format='f', digits=4)
+  mg_kg        <- formatC(mg_kg,        format='f', digits=4)
+  mg_L         <- formatC(mg_L,         format='f', digits=4)
+  mL_L         <- formatC(mL_L,         format='f', digits=4)
+  mL_kg        <- formatC(mL_kg,        format='f', digits=4)
+  atm          <- formatC(atm,          format='f', digits=4)
+  mmHg         <- formatC(mmHg,         format='f', digits=4)
+  mbar         <- formatC(mbar,         format='f', digits=4)
+  psi          <- formatC(psi,          format='f', digits=4)
+  inHg         <- formatC(inHg,         format='f', digits=4)
+  inH2O        <- formatC(inH2O,        format='f', digits=4)
+  
+  # c("mg/kg", "mg/L", 
+  #   'μmol/kg', 'μmol/L', "mmol/kg", "mmol/L",
+  #   'mL/kg', 'mL/L',
+  #   'atm', 'mm Hg (torr)', 'mbar', 'psi', 'in Hg', 'in H2O')
+  # c(mg_kg, mg_L, 
+  #   micro_mol_kg, micro_mol_L, mmol_kg, mmol_L,
+  #   mL_kg, mL_L,
+  #   atm, mmHg, mbar, psi, inHg, inH2O)
+  
+  df <- data.frame(vals = c(atm, mmHg, mg_L, mL_L, micro_mol_kg,
+                            mg_kg, mL_kg,
+                            mbar, psi, inHg, inH2O,
+                            micro_mol_L, mmol_kg, mmol_L),
+                   # units = alkUnitsList_short,
+                   units = c('atm', 'mm Hg (torr)', 'mg/L', 'mL/L', "μmol/kg", 
+                             'mg/kg', 'mL/kg',
+                             'mbar', 'psi', 'in Hg', 'in H2O',
+                             "μmol/L", "mmol/kg", "mmol/L"), 
+                   
+                   # NB: ** NEED ** "stringsAsFactors = FALSE" to quell...
+                   # Warning in `[<-.factor`(`*tmp*`, idx_s, value = "<strong><i>33.00</i></strong>") :
+                   # invalid factor level, NA generated
+                   # when print
+                   stringsAsFactors = FALSE
+                   )
+  
+  return(df)
+}
+
+
+# convertGasFromTo()
+# -- 'to_units' is a vector, no need to process ALL conveesions
+
+# NB: transpose data.frame
+
+# > n <- convertGasFromTo('N2', 268.7288, 'μmol/kg', c('mm Hg (torr)', 'atm', 'mg/L'), 273.15 + 23, 0)
+# > n
+
+# > n <- convertGasFromTo('N2', 268.7288, 'μmol/kg', c('mm Hg (torr)', 'atm', 'mg/L'), 273.15 + 23, 0)
+# > n
+#     vals      units        gas_type
+# 1 307.1559 mm Hg (torr)       N2
+# 2   0.4042          atm       N2
+# 3   7.5100         mg/L       N2
+# 
+# > n %>% spread(gas_type, vals)
+# units       N2
+# 1          atm   0.4042
+# 2         mg/L   7.5100
+# 3 mm Hg (torr) 307.1559
+# > n %>% spread(gas_type, vals) %>% spread(units, N2)
+# atm mg/L mm Hg (torr)
+# 1 0.3536 6.57     268.7288
+
+convertGasFromTo <- function(gas_type, 
+                             from_val, from_units, 
+                             to_units, 
+                             temp, sal,
+                             bp) {
+# convertGasFromTo <- function(gas_type, 
+#                              from_val, from_units, 
+#                              to_units, 
+#                              temp, sal) {
+  
+  idx_from_units <- which(gasUnitsListPref == from_units)
+  
+  df <- calcGasAllUnits(gas_type, from_val, gasUnitsListPref[idx_from_units], temp, sal, bp)
+  
+  to_vals <- c()
+  
+  idx <- 0
+  
+  for(u in to_units) {
+
+    x <- df %>% filter(units == u) %>% dplyr::select(vals)
+    
+    idx <- idx + 1
+    to_vals[idx] <- as.numeric(as.character(x))
+    # cat(as.numeric(as.character(x)), '\n')
+    # cat(to_vals, '\n')
+  }
+  
+  df <- data.frame(vals = to_vals,
+                   units = to_units, 
+                   gas_type = rep(gas_type, length(to_units)),
+                   
+                   # NB: ** NEED ** "stringsAsFactors = FALSE" to quell...
+                   # Warning in `[<-.factor`(`*tmp*`, idx_s, value = "<strong><i>33.00</i></strong>") :
+                   # invalid factor level, NA generated
+                   # when print
+                   stringsAsFactors = FALSE
+  )
+  
+  return(df)
+}
+
+
+# ---- TGP ----
+
+# to I.C. units (ΔP) from...
+#     %, 
+#   atm,   mm Hg (torr),   mbar, 
+# Δ atm, Δ mm Hg (torr), Δ mbar
+calc_delta_p_to_ic_units <- function(tgp_val, tgp_units, bp_ic) {
+  
+  if('%' == tgp_units) {
+    return((bp_ic * 759.999952) * ((tgp_val / 100.0) - 1.0))
+    # return(((tgp_val / 100.0) * (bp_ic * 759.999952)) - (bp_ic * 759.999952))
+  }
+  
+  
+  if('atm' == tgp_units) {
+    return((tgp_val - bp_ic) * 759.999952)
+  }
+  
+  if('mm Hg (torr)' == tgp_units) {
+    return(tgp_val - bp_ic * 759.999952)
+    # return(100 * tgp_val / (bp_ic * 759.999952)) # [atm] * [759.999952 mm Hg/atm]
+  }
+  
+  if('mbar' == tgp_units) {
+    return((tgp_val - bp_ic * 1013.2501) * 0.7500615613)
+    # return(100 * tgp_val / (bp_ic / 0.000986923)) # [atm] / [0.000986923 atm/mbar]
+  }
+  
+  
+  if('Δ atm' == tgp_units) {
+    return(tgp_val * 759.999952)
+    # return(100 * (1 + (tgp_val / bp_ic)))
+  }
+  
+  if('Δ mm Hg (torr)' == tgp_units) {
+    return(tgp_val)
+    # return(100 * (1 + (tgp_val / (bp_ic * 759.999952))))
+  }
+  
+  if('Δ mbar' == tgp_units) {
+    return(tgp_val * 0.7500615613)
+    # return(100 * (1 + (tgp_val / (bp_ic / 0.000986923))))
+  }
+  
+}
+
+
+# %, atm, mm Hg (torr), mbar, Δ atm, Δ mm Hg (torr), Δ mbar
+calc_delta_p_to_all_units <- function(tgp_val, tgp_units, bp_ic) {
+  
+  tgp_ic <- calc_delta_p_to_ic_units(tgp_val, tgp_units, bp_ic)
+  
+  bp_mm_hg <- bp_ic * 759.999952
+  
+  delta_p_mm_hg <- round(tgp_ic, 5)
+  delta_p_atm   <- round(tgp_ic / 759.999952, 5)
+  delta_p_mbar  <- round(tgp_ic / 0.7500615613, 5)
+  
+  tgp_mm_hg <- round(tgp_ic + bp_mm_hg, 5)
+  tgp_atm   <- round(tgp_ic + bp_ic, 5)
+  tgp_mbar  <- round(tgp_ic + bp_ic * 1013.2501, 5)
+  
+  po_sto <- round(100.0 * (tgp_ic + bp_mm_hg) / bp_mm_hg, 5)
+  
+  
+  
+  delta_p_mm_hg <- formatC(delta_p_mm_hg, format='f', digits=2)
+  delta_p_atm   <- formatC(delta_p_atm, format='f', digits=3)
+  delta_p_mbar  <- formatC(delta_p_mbar, format='f', digits=2)
+  
+  tgp_mm_hg <- formatC(tgp_mm_hg, format='f', digits=2)
+  tgp_atm   <- formatC(tgp_atm, format='f', digits=3)
+  tgp_mbar  <- formatC(tgp_mbar, format='f', digits=2)
+  
+  po_sto <- formatC(po_sto, format='f', digits=2)
+  
+  
+  # % & mm Hg only ...
+  df <- data.frame(gas = c(rep('TGP', 3)), 
+                   vals = c(po_sto, tgp_mm_hg, delta_p_mm_hg),
+                   units = c('%', 'mm Hg', 'Δ mm Hg'), 
+                   
+                   # NB: ** NEED ** "stringsAsFactors = FALSE" to quell...
+                   # Warning in `[<-.factor`(`*tmp*`, idx_s, value = "<strong><i>33.00</i></strong>") :
+                   # invalid factor level, NA generated
+                   # when print
+                   stringsAsFactors = FALSE
+  )
+  
+  # NB: cast chars to numeric for bind_rows in tgp_module
+  df$vals <- as.numeric(df$vals)
+  
+  return(df)
+  
+}
+
+# 
+# >> CALC TGP DATA << ----
+calc_tgp_n2ar_o2_co2 <- function(temp_ic, sal_ic,
+                                 ph_ic,   alk_ic,    # NB: [Alk] in meq/kg (e.g., "2.4")
+                                 bp_ic,
+                                 ic_delta_p,
+                                 o2_ic,
+                                 is_co2_by_measurement,
+                                 co2_mole_fraction_ic,
+                                 co2_in_mg_L) {
+ 
+  # NB: I.C. [Alk] in meq/kg (e.g., "2.4"), so take to eq/kg
+  alk_ic    <- alk_ic / 1000.0
+  
+  vp_ic     <- calcVP(temp_ic, sal_ic)
+  vp_mm_hg  <- vp_ic * 759.999952
+  
+  
+  # calculate CO2 ----
+  if(is_co2_by_measurement) {
+    
+    co2_in_mg_per_L <- co2_in_mg_L
+    
+  } else {
+    
+    co2_actual_mol_kg <- alphaZero(temp_ic, 
+                                   sal_ic, 
+                                   ph_ic) * calcDicOfAlk(alk_ic, ph_ic, temp_ic, sal_ic)
+    
+    co2_in_mg_per_L <- 1000.0 * co2_actual_mol_kg * MW_CO2 * (calcRho(temp_ic, sal_ic) / 1000.0)
+  }
+  
+  co2_for_tgp <- tgp_calc_co2(temp_ic, sal_ic,
+                              ph_ic, alk_ic,    
+                              co2_mole_fraction_ic,
+                              bp_ic,
+                              co2_in_mg_per_L)
+  
+  # print(co2_for_tgp)
+  # print(co2_for_tgp$'mm Hg')
+  # print(class(co2_for_tgp$'mm Hg'))
+  
+  # partial pressure of 
+  co2_mm_hg   <- co2_for_tgp$'mm Hg'
+  delta_p_co2 <- co2_for_tgp$'Δ mm Hg'
+  po_sto_co2  <- co2_for_tgp$'%'
+  
+  co2_for_tgp$'%'       <- formatC(co2_for_tgp$'%',       format='f', digits=2)
+  co2_for_tgp$'Δ mm Hg' <- formatC(co2_for_tgp$'Δ mm Hg', format='f', digits=2)
+  co2_for_tgp$'mm Hg'   <- formatC(co2_for_tgp$'mm Hg',   format='f', digits=2)
+  
+  
+  # calculate O2 ----
+  
+  o2_in_mg_per_L <- convertGasFromTo('O2', 
+                                     o2_ic, 'μmol/kg', 
+                                     'mg/L', 
+                                     temp_ic, sal_ic, bp_ic)
+  
+  # o2_in_mmHg <- (o2_in_mg_per_L$vals / calcBunsen_Weiss('O2', temp_ic, sal_ic)) * (0.760 / (MW_O2 / MV_O2))
+  o2_in_mmHg <- (o2_in_mg_per_L$vals / calcBunsen_O2_Colt(temp_ic, sal_ic)) * (0.760 / (MW_O2 / MV_O2))
+  
+  delta_p_o2 <- o2_in_mmHg - MFV_O2 * (bp_ic - vp_ic) * 759.999952
+  
+  po_sto_o2  <- 100.0 * o2_in_mmHg / (MFV_O2 * (bp_ic - calcVP(temp_ic, sal_ic)) * 759.999952)
+  
+  # cat('COMPARE BUNSEN O2: ', 
+  #     calcBunsen_Weiss('O2', temp_ic, sal_ic), 
+  #     ' vs. ', 
+  #     calcBunsen_O2_Colt(temp_ic, sal_ic), '\n')
+     
+  # calculate N2 + Ar ----
+  
+  n2_plus_ar_mm_hg <- (bp_ic * 759.999952 + ic_delta_p) - 
+                      (o2_in_mmHg + vp_mm_hg + co2_mm_hg)
+  
+  delta_p_n2_ar <- n2_plus_ar_mm_hg - (MFV_N2 + MFV_AR) * (bp_ic - vp_ic) * 759.999952
+  
+  po_sto_n2_ar  <- 100 * (n2_plus_ar_mm_hg) / ((MFV_N2 + MFV_AR) * (bp_ic - vp_ic) * 759.999952)
+  
+  
+  my_tgp_mm_hg  <- bp_ic * 759.999952 + ic_delta_p
+  
+  
+  n2_o2_ratio   <- n2_plus_ar_mm_hg / o2_in_mmHg
+  
+  
+  # df <- tibble(gas           = c('TGP', 'O2', 'N2 + Ar', 'CO2', 'H2O vapor'),
+  #              'P (mm Hg)'   = c(my_tgp_mm_hg, o2_in_mmHg, n2_plus_ar_mm_hg, co2_mm_hg, vp_mm_hg),
+  #              'Δ P (mm Hg)' = c(ic_delta_p, delta_p_o2, delta_p_n2_ar, delta_p_co2, '-'),
+  #             '%'            = c(100.0 * my_tgp_mm_hg / (bp_ic * 759.999952), po_sto_o2, po_sto_n2_ar, co2_for_tgp$'%', '-')
+  # )
+  
+  tgp_mm_hg  <- formatC(my_tgp_mm_hg, format='f', digits=2)
+  ic_delta_p <- formatC(ic_delta_p, format='f', digits=2)
+  po_sto_tgp <- formatC(100.0 * my_tgp_mm_hg / (bp_ic * 759.999952), format='f', digits=2)
+  
+  o2_in_mmHg <- formatC(o2_in_mmHg, format='f', digits=2)
+  delta_p_o2 <- formatC(delta_p_o2, format='f', digits=2)
+  po_sto_o2  <- formatC(po_sto_o2, format='f', digits=2)
+  
+  n2_plus_ar_mm_hg <- formatC(n2_plus_ar_mm_hg, format='f', digits=2)
+  delta_p_n2_ar    <- formatC(delta_p_n2_ar, format='f', digits=2)
+  po_sto_n2_ar     <- formatC(po_sto_n2_ar, format='f', digits=2)
+  
+  co2_mm_hg   <- formatC(co2_mm_hg, format='f', digits=2)
+  delta_p_co2 <- formatC(delta_p_co2, format='f', digits=2)
+  po_sto_co2  <- formatC(po_sto_co2, format='f', digits=2)
+  
+  vp_mm_hg    <- formatC(vp_mm_hg, format='f', digits=2)
+  
+  n2_o2_ratio <- formatC(n2_o2_ratio, format='f', digits=2) 
+  
+  
+  df <- tibble(' '       = c('P (mm Hg)',      'Δ P (mm Hg)', '%'),
+               'Total'   = c(tgp_mm_hg,        ic_delta_p,    po_sto_tgp),
+               O2        = c(o2_in_mmHg,       delta_p_o2,    po_sto_o2),
+               'N2+Ar'   = c(n2_plus_ar_mm_hg, delta_p_n2_ar, po_sto_n2_ar),
+               'N2:O2'   = c(n2_o2_ratio,      '-',           '-'),
+               CO2       = c(co2_mm_hg,        delta_p_co2,   po_sto_co2),
+               vapor     = c(vp_mm_hg,         '-',           '-')
+  )
+  
+  # cat('\n\n\n================\n')
+  # cat('EVO ga! \n')
+  # print(df)
+  # cat('================\n\n')
+  
+  df
+  
+  
+  # cat('new TGP df...\n')
+  # df_tgp <- tibble(units = c('gas', 'P (mm Hg)',   'Δ P (mm Hg)', '%'),
+  #                  vals  = c('TGP',  my_tgp_mm_hg,  ic_delta_p,    100.0 * my_tgp_mm_hg / (bp_ic * 759.999952))
+  # )
+  # 
+  # df_tgp <- df_tgp %>% spread(units, vals)
+  # 
+  # 
+  # cat('new O2 df...\n')
+  # df_o2 <- tibble(units = c('gas', 'P (mm Hg)', 'Δ P (mm Hg)', '%'),
+  #                 vals  = c('O2',   o2_in_mmHg,  delta_p_o2,    po_sto_o2)
+  # )
+  # # cat('\n================\n')
+  # print(df_o2)                
+  # df_o2 <- df_o2 %>% spread(units, vals)
+  # print(df_o2)
+  # # cat('================\n\n')
+  # 
+  # cat('new N2 df...\n')
+  # df_n2 <- tibble(units = c('gas',     'P (mm Hg)',      'Δ P (mm Hg)', '%'),
+  #                 vals  = c('N2 + Ar',  n2_plus_ar_mm_hg, delta_p_n2_ar, po_sto_n2_ar)
+  # )
+  # 
+  # df_n2 <- df_n2 %>% spread(units, vals)
+  # 
+  # 
+  # cat('new CO2 df...\n')
+  # df_co2 <- tibble(units = c('gas', 'P (mm Hg)', 'Δ P (mm Hg)', '%'),
+  #                 vals   = c('CO2',  co2_mm_hg,   delta_p_co2,   co2_for_tgp$'%')
+  # )
+  # 
+  # df_co2 <- df_co2 %>% spread(units, vals)
+  # 
+  # 
+  # cat('new VP df...\n')
+  # df_vp <- tibble(units = c('gas',    'P (mm Hg)', 'Δ P (mm Hg)', '%'),
+  #                 vals  = c('vapor',   vp_mm_hg,   '-',           '-')
+  # )
+  # 
+  # df_vp <- df_vp %>% spread(units, vals)
+  # 
+  # 
+  # df_all <- bind_rows(df_tgp, df_o2, df_n2, df_co2, df_vp)
+  # 
+  # print(df_all)
+  # print(df_all[, 'gas', 'P (mm Hg)', 'Δ P (mm Hg)', '%'])
+  
+  # print(df_o2_n2_co2 %>% spread(units, vals))
+  
+}
+
+
+
+# [DEPRECATED] TGP i.c. as %----
+
+# to I.C. units (%) from...
+# %, atm, mm Hg (torr), mbar, Δ atm, Δ mm Hg (torr), Δ mbar
+calcTgpToIcUnits <- function(tgp_val, tgp_units, bp_ic) {
+  
+  if('%' == tgp_units) {
+    return(tgp_val)
+  }
+  
+  if('atm' == tgp_units) {
+    return(100 * tgp_val / bp_ic)
+  }
+  
+  if('mm Hg (torr)' == tgp_units) {
+    return(100 * tgp_val / (bp_ic * 759.999952)) # [atm] * [759.999952 mm Hg/atm]
+  }
+  
+  if('mbar' == tgp_units) {
+    return(100 * tgp_val / (bp_ic / 0.000986923)) # [atm] / [0.000986923 atm/mbar]
+  }
+  
+  if('Δ atm' == tgp_units) {
+    return(100 * (1 + (tgp_val / bp_ic)))
+  }
+  
+  if('Δ mm Hg (torr)' == tgp_units) {
+    return(100 * (1 + (tgp_val / (bp_ic * 759.999952))))
+  }
+  
+  if('Δ mbar' == tgp_units) {
+    return(100 * (1 + (tgp_val / (bp_ic / 0.000986923))))
+  }
+  
+}
+
+# %, atm, mm Hg (torr), mbar, Δ atm, Δ mm Hg (torr), Δ mbar
+calcTgpToAllUnits <- function(tgp_val, tgp_units, bp_ic) {
+  
+  tgp_po_sto_ic <- calcTgpToIcUnits(tgp_val, tgp_units, bp_ic)
+  tgp_frac_ic   <- tgp_po_sto_ic / 100.0
+  
+  tgp_po_sto  <- round(tgp_po_sto_ic, 5)
+  tgp_atm     <- round(tgp_frac_ic * bp_ic, 5)
+  tgp_mmHg    <- round(tgp_frac_ic * bp_ic * 759.999952, 5)
+  tgp_mbar    <- round(tgp_frac_ic * bp_ic / 0.000986923, 5)
+  tgp_atm_dp  <- round((tgp_frac_ic - 1) * bp_ic, 5)
+  tgp_mmHg_dp <- round((tgp_frac_ic - 1) * bp_ic * 759.999952, 5)
+  tgp_mbar_dp <- round((tgp_frac_ic - 1) * bp_ic / 0.000986923, 5)  # [μmol/kg] * [kg/L] * [mL/mmol] * [mmol/μmol]
+  
+  tgp_po_sto  <- formatC(tgp_po_sto, format='f', digits=2)
+  tgp_atm     <- formatC(tgp_atm, format='f', digits=3)
+  tgp_mmHg    <- formatC(tgp_mmHg, format='f', digits=2)
+  tgp_mbar    <- formatC(tgp_mbar, format='f', digits=2)
+  tgp_atm_dp  <- formatC(tgp_atm_dp, format='f', digits=3)
+  tgp_mmHg_dp <- formatC(tgp_mmHg_dp, format='f', digits=2)
+  tgp_mbar_dp <- formatC(tgp_mbar_dp, format='f', digits=2)
+  
+  
+  # % & mm Hg only ...
+  df <- data.frame(gas = c(rep('TGP', 3)), 
+                   vals = c(tgp_po_sto, tgp_mmHg, tgp_mmHg_dp),
+                   units = c('%', 'mm Hg', 'Δ mm Hg'), 
+                   
+                   # NB: ** NEED ** "stringsAsFactors = FALSE" to quell...
+                   # Warning in `[<-.factor`(`*tmp*`, idx_s, value = "<strong><i>33.00</i></strong>") :
+                   # invalid factor level, NA generated
+                   # when print
+                   stringsAsFactors = FALSE
+  )
+  
+  # NB: cast chars to numeric for bind_rows in tgp_module
+  df$vals <- as.numeric(df$vals)
+  
+  return(df)
+  
+}
+
+
+# --- Inputs...
+# gas type -- O2, N2, Ar, CO2
+# I.C. gas value *in* μmol/kg
+# (I.C. gas units) (μmol/kg)
+# I.C. temp (K)
+# I.C. salinity (ppt)
+# I.C. barometric pressure (atm)
+# TGP in ... % || Tot (atm) || Δ P (atm)
+
+# O2 results: 
+# O2 atm, O2 mm Hg, O2 mg/L, O2 % sat, Δ P O2 (P_sat - P_measured)
+
+# > tgpCalcO2Data(231.5154, 273.15 + 23, 0, 1.006579)
+# > tgpCalcO2Data(123.67, 273.15 + 30, 0, 0.8605264)
+
+tgpCalcO2Data <- function(o2_ic, temp_ic, sal_ic, bp_ic) {
+  
+  # satuartion O2 in μmol/kg
+  o2_sat_ic <- calcGasSat('O2', temp_ic, sal_ic, bp_ic)
+  # cat('... tgpCalcO2Data ... o2_sat_ic = ', o2_sat_ic,'\n')
+  
+  o2_sat_po_sto <- o2_ic * 100 / o2_sat_ic
+  
+  # convert O2 MEASURED value from μmol/kg to PRESSURE & display units
+  # cat('... tgpCalcO2Data ... o2_ic = ', o2_ic,'\n')
+  
+  df_o2_mea <- convertGasFromTo('O2', o2_ic, 'μmol/kg', 
+                                c('atm', 'mm Hg (torr)'), 
+                                temp_ic, sal_ic, bp_ic)
+  
+  # convert O2 SATURATION value from μmol/kg to PRESSURE & display units
+  df_o2_sat <- convertGasFromTo('O2', o2_sat_ic, 'μmol/kg', 
+                                c('atm', 'mm Hg (torr)'), 
+                                temp_ic, sal_ic, bp_ic)
+  
+  vp_atm <- calcVP(temp_ic, sal_ic)
+  vp_mmHg <- vp_atm * 759.999952
+  
+  o2_measured_mmHg <- as.numeric(as.character(df_o2_mea$vals[2]))
+  o2_sat_mmHg <- as.numeric(as.character(df_o2_sat$vals[2]))
+  
+  o2_delta_p <- o2_measured_mmHg - o2_sat_mmHg
+  
+  
+  pO2_gas <- MFV_O2 * (bp_ic - vp_atm) * 759.999952
+  # print(convertGasFromTo('O2', pO2_gas, 'mm Hg (torr)', 'mg/L', temp_ic, sal_ic))
+  # print(convertGasFromTo('O2', (bp_ic - vp_atm) * 759.999952, 'mm Hg (torr)', 'mg/L', temp_ic, sal_ic))
+  
+  # cat('in tgpCalcO2Data ...\n')
+  # cat('           pO2_gas = ', convertGasFromTo('O2', pO2_gas, 'mm Hg (torr)', 'mg/L', temp_ic, sal_ic), '\n')
+  # cat('  o2_measured_mmHg = ', convertGasFromTo('O2', o2_measured_mmHg, 'mm Hg (torr)', 'mg/L', temp_ic, sal_ic), '\n')
+  # cat('    pO2_gas (pure) = ', 
+  #     convertGasFromTo('O2', (bp_ic - vp_atm) * 759.999952, 'mm Hg (torr)', 'mg/L', temp_ic, sal_ic), '\n')
+  # 
+  
+  return(c('O₂ sat (μmol/kg)' = o2_sat_ic,
+           'O₂ sat (%)' = o2_sat_po_sto,
+           'Δ pO₂ (mm Hg)' = o2_delta_p,
+           'O₂ (mm Hg)' = o2_measured_mmHg,
+           'VP (mm Hg)' = vp_mmHg))
+}
+
+
+
+# @tgp_po_sto, atm (I.C. units)
+# @o2_ic, μmol/kg (I.C. units)
+# @temp, K (I.C. units)
+# @sal, ppt (I.C. units)
+# @bp_ic, atm (I.C. units)
+# RETURN % saturation N2 + Ar
+
+# Ex: tgpCalcN2ArFromTgp_po_sto(115.8, 231.5154, 273.15 + 23, 0, 1.006579)
+
+tgpCalcN2ArFromTgp_po_sto <- function(tgp_po_sto_ic,
+                                      o2_ic, 
+                                      temp_ic, sal_ic, 
+                                      bp_ic) {
+    
+  # convert bp_ic (atm) to mm Hg
+  bp_mmHg <- bp_ic * 759.999952
+  # cat('bp_mmHg = ', bp_mmHg, '\n')
+  
+  # o2_data <- c(o2_sat_ic, o2_sat_po_sto, o2_delta_p, o2_measured_mmHg, vp_mmHg)
+  o2_data <- tgpCalcO2Data(o2_ic, temp_ic, sal_ic, bp_ic)
+  
+  # O2 sat, μmol/kg
+  o2_sat_ic <- o2_data[1]
+  # cat('    o2_sat_ic = ', o2_sat_ic, 'μmol/kg \n')
+  
+  # O2 sat, percentage
+  o2_sat_po_sto <- o2_data[2]
+  # cat('o2_sat_po_sto = ', o2_sat_po_sto, '% \n')
+  
+  o2_delta_p <- o2_data[3]
+  # cat(   'o2_delta_p = ', o2_delta_p, '% \n')
+  
+  # [ERROR] when add pure O2, drive mm Hg N2 < 0 !! ----
+  pN2_mmHg <- (tgp_po_sto_ic * bp_mmHg / 100.0) - o2_data[4] - o2_data[5]
+  
+  # calc N2 saturation (%)
+  # n2_sat_po_sto <- (tgp_po_sto_ic - o2_sat_po_sto * MFV_O2) / MFV_N2
+  
+  # *** *** from "TGE_300E_XgasDP4..." spreadsheet
+  n2_sat_po_sto <- 100.0 * pN2_mmHg / ((MFV_N2 + MFV_AR) * (bp_mmHg - o2_data[5]))
+  # cat('n2_sat_po_sto = ', n2_sat_po_sto, '% \n')
+  
+  # calc N2 saturation (μmol/kg)
+  n2_sat_ic <- calcGasSat('N2', temp_ic, sal_ic, bp_ic)
+  # cat('n2_sat_ic = ', n2_sat_ic, 'μmol/kg \n')
+  
+  # calc N2 ACTUAL (μmol/kg)
+  n2_actual_ic <- n2_sat_ic * (n2_sat_po_sto / 100)
+  # cat('n2_actual_ic = ', n2_actual_ic, 'μmol/kg \n')
+  
+  # convert N2 SAT from μmol/kg to PRESSURE
+  df_n2_sat_pressure <- convertGasFromTo('N2', n2_sat_ic, 'μmol/kg',
+                                         c('atm', 'mm Hg (torr)'),
+                                         temp_ic, sal_ic, bp_ic)
+
+  # # convert N2 ACTUAL from μmol/kg to PRESSURE
+  df_n2_actual_pressure <- convertGasFromTo('N2', n2_actual_ic, 'μmol/kg',
+                                            c('atm', 'mm Hg (torr)'),
+                                            temp_ic, sal_ic, bp_ic)
+  
+  # n2_delta_p <- as.numeric(as.character(df_n2_actual_pressure$vals[2])) - 
+  #               as.numeric(as.character(df_n2_sat_pressure$vals[2]))
+  
+  # *** *** from "TGE_300E_XgasDP4..." spreadsheet
+  n2_delta_p <- pN2_mmHg - (MFV_N2 + MFV_AR) * (bp_mmHg - o2_data[5])
+  
+  # cat('        as.numeric(as.character(df_n2_actual_pressure$vals[2])) = ', 
+  #     as.numeric(as.character(df_n2_actual_pressure$vals[2])), 'mm Hg \n')
+  # cat('        as.numeric(as.character(df_n2_sat_pressure$vals[2])) = ', 
+  #     as.numeric(as.character(df_n2_sat_pressure$vals[2])), 'mm Hg \n')
+  
+  
+  # cat('Δ N2_mmHg* = ', pN2_mmHg - (MFV_N2 + MFV_AR) * (bp_mmHg - o2_data[5]), 'mm Hg \n')
+  # cat('n2_delta_p = ', n2_delta_p, 'mm Hg \n')
+  # cat(' pN2_mmHg = ', pN2_mmHg, 'mm Hg \n')
+  # cat('n2_sat_ic = ', as.numeric(as.character(df_n2_sat_pressure$vals[2])), 'mm Hg \n')
+  # cat(' n2_sat % = ', 100.0 * pN2_mmHg / as.numeric(as.character(df_n2_sat_pressure$vals[2])), '% \n')
+  # cat('n2_sat %* = ', 100.0 * pN2_mmHg / ((MFV_N2 + MFV_AR) * (bp_mmHg - o2_data[5])), '% \n')
+  
+  # cat('pO2_mmHg = ', o2_data[4], 'mm Hg \n')
+  # # cat('      VP = ', o2_data[5], 'mm Hg \n')
+  # cat('pN2_mmHg = ', pN2_mmHg, 'mm Hg \n')
+  # cat('Δ pN2    = ', pN2_mmHg - as.numeric(as.character(df_n2_sat_pressure$vals[2])), 'mm Hg \n')
+  
+  # 101.325 kPa / atm
+  #          %         atm   mbar       mm Hg           Δ atm  Δ mbar  Δ mm Hg
+  # 1 TGP 100.00      1.000 1013.25    760.00           0.000   0.00    0.00
+  #    o2_sat_po_sto              o2_measured_mmHg    o2_delta_p       
+  # calcGasAllUnits('O2', my_icO2, 'μmol/kg', my_icTemp, my_icSal)
+  # calcGasAllUnits('N2', ---, 'μmol/kg', my_icTemp, my_icSal)
+  
+  # % & mm Hg only -- O2 & N2 ...
+  df <- data.frame(gas = c(rep('O₂', 3), rep('N₂ + Ar', 3)), 
+                   vals = c(o2_data[2], o2_data[4], o2_data[3],
+                            n2_sat_po_sto, pN2_mmHg, n2_delta_p),
+                   units = c('%', 'mm Hg', 'Δ mm Hg',
+                             '%', 'mm Hg', 'Δ mm Hg'), 
+                   
+                   # NB: ** NEED ** "stringsAsFactors = FALSE" to quell...
+                   # Warning in `[<-.factor`(`*tmp*`, idx_s, value = "<strong><i>33.00</i></strong>") :
+                   # invalid factor level, NA generated
+                   # when print
+                   stringsAsFactors = FALSE
+  )
+  
+  df <- df %>% spread(units, vals)
+  
+  return(df)
+}
+
+
+
+tgp_calc_co2 <- function (temp_ic, sal_ic,
+                          ph_ic, alk_ic,
+                          co2_mole_fraction_ic,
+                          bp_ic,
+                          co2_in_mg_L) {
+  
+  # cat('\n==========================\n')
+  # cat('CONVERT GASSES, sal_ic = ', sal_ic, '\n')
+  # cat('CARB_CALC, NULL = ', is.null(sal_ic), '\n')
+  # cat('CARB_CALC, {} = ', identical(sal_ic, character(0)), '\n')
+  # cat('CARB_CALC, \'\' = ', identical(sal_ic, ''), '\n')
+  # cat('==========================\n\n')
+  
+  if(is.null(sal_ic))
+    return()
+  
+  # NB: ...
+  alk_ic <- alk_ic / 1000.0
+  
+  vp_ic <- calcVP(temp_ic, sal_ic)
+  
+  # CO2 SAT ----
+  # (dry air) in mg/L (in CarbCalc.R)
+  co2_sat_mg_L <- calc_CO2_gasSat_mg_L(temp_ic, sal_ic, 
+                                       bp_ic, 
+                                       co2_mole_fraction_ic)
+  
+  # CO2 ACTUAL ----
+  # by pH & [Alk]
+  
+  # CO2 actual in mol/kg-soln (in CarbCalc.R)
+  co2_actual_mol_kg <- alphaZero(temp_ic, sal_ic, ph_ic) * calcDicOfAlk(alk_ic, ph_ic, temp_ic, sal_ic)
+  
+  co2_actual_mg_L <- 1000.0 * co2_actual_mol_kg * MW_CO2 * (calcRho(temp_ic, sal_ic) / 1000.0)
+  
+  # CO2 PERCENT saturation ----
+  # co2_po_sto <- 100.0 * co2_actual_mg_L / co2_sat_mg_L
+  co2_po_sto <- 100.0 * co2_in_mg_L / co2_sat_mg_L
+  
+  
+  # convert CO2 mg/L to pCO2
+  # co2_atm <- (co2_actual_mg_L / co2_sat_mg_L) * (co2_mole_fraction_ic / 1000000)
+  co2_atm <- (co2_in_mg_L / co2_sat_mg_L) * (co2_mole_fraction_ic / 1000000)
+  
+  # CO2 TENSION ----
+  co2_mmHg <- co2_atm * 759.999952
+  
+  
+  # CO2 ΔP ----
+  # delta_co2 <- (co2_atm - bp_ic) * 759.999952
+  delta_co2_3 <- co2_mmHg - co2_mole_fraction_ic * (bp_ic - vp_ic)
+  
+  delta_co2 <- (co2_atm - bp_ic * (co2_mole_fraction_ic / 1000000)) * 759.999952
+  
+  
+  # cat('\n\n===============================================\n')
+  # cat('IN converter_gasses.R/tgp_calc_co2\n')
+  # cat('               co2_sat_mg_L = ', co2_sat_mg_L, '\n')
+  # cat('            co2_actual_mg_L = ', co2_actual_mg_L, '\n')
+  # cat('                 co2_po_sto = ', co2_po_sto, '\n')
+  # cat('-----\n')
+  # cat('          co2_actual_mol_kg = ', co2_actual_mol_kg, ' μmol/kg-soln \n')
+  # x <- calc_CO2_gasSat_microMol_kg(temp_ic, sal_ic, bp_ic, co2_mole_fraction_ic)
+  # cat('calc_CO2_gasSat_microMol_kg = ', x, ' μmol/kg-soln \n')
+  # cat('-----\n')
+  # cat('                   co2_mmHg = ', co2_mmHg, 'mm Hg \n')
+  # 
+  # cat('                Δ delta_co2 = ', delta_co2, 'mm Hg\n')
+  # delta_co2_2 <- tgp_co2_from_delta_pressure(temp_ic, sal_ic, bp_ic, co2_mole_fraction_ic)
+  # cat('              Δ delta_co2_2 = ', delta_co2_2, 'mm Hg\n')
+  # 
+  # cat('         **   Δ delta_co2_3 = ', delta_co2_3, 'mm Hg\n')
+  # cat('===============================================\n\n')
+  
+  
+  # CO2  data...
+  
+  df <- data.frame(gas = c(rep('CO₂', 3)),
+                   vals = c(co2_po_sto, co2_mmHg, delta_co2),
+                   units = c(      '%',  'mm Hg', 'Δ mm Hg'), 
+                   
+                   # NB: ** NEED ** "stringsAsFactors = FALSE" to quell...
+                   # Warning in `[<-.factor`(`*tmp*`, idx_s, value = "<strong><i>33.00</i></strong>") :
+                   # invalid factor level, NA generated
+                   # when print
+                   stringsAsFactors = FALSE
+  )
+  
+  # NB: cast chars to numeric for bind_rows in tgp_module
+  df$vals <- as.numeric(df$vals)
+  
+  df <- df %>% spread(units, vals)
+  
+  return(df)
+}
+
+
+# to I.C. units (μatm) from...
+# c('μatm', "μmol/mol", 'ppmv', '%')
+calcCo2_atmmos_ToIcUnits <- function(co2_val, co2_units) {
+  
+  if('μatm' == co2_units) {
+    return(co2_val)
+  }
+  
+  if('μmol/mol' == co2_units) {
+    return(co2_val)
+  }
+  
+  if('ppmv' == co2_units) {
+    return(co2_val)
+  }
+  
+  if('%' == co2_units) {
+    return(co2_val * 10^6 / 100.0)
+  }
+  
+}
+
+
+# TGP: CO2 as in Colt ----
+
+tgp_co2_from_pressure <- function(temp, sal, bp, co2_mole_fraction) {
+  
+  co2_in_mg_per_L <- calc_CO2_gasSat_mg_L(temp, sal, bp, co2_mole_fraction)
+  
+  cat('co2_in_mg_per_L, [CO2] = ', co2_in_mg_per_L, ' mg/L \n')
+  
+  co2_in_mmHg <- (co2_in_mg_per_L / calcBunsen_Weiss('CO2', temp, sal)) * (0.760 / (MW_CO2 / MV_CO2))
+  
+  cat('co2_in_mmHg = ', co2_in_mmHg, ' mm Hg \n')
+  
+  return(co2_in_mmHg)
+}
+
+
+tgp_co2_from_delta_pressure <- function(temp, sal, bp, co2_mole_fraction) {
+  
+  cat('tgp_co2_from_delta_pressure \n')
+  
+  # co2_mole_fraction <- co2_mole_fraction / 1000.0
+  
+  co2_pressure_mmHg <- tgp_co2_from_pressure(temp, sal, bp, co2_mole_fraction)
+  
+  co2_delta_p <- co2_pressure_mmHg - co2_mole_fraction * (bp - calcVP(temp, sal)) * 760.0
+  
+  return(co2_delta_p)
+}
+
+
+tgp_co2_from_percent <- function(temp, sal, bp, co2_mole_fraction) {
+  
+  cat('tgp_co2_from_percent \n')
+  
+  # co2_mole_fraction <- co2_mole_fraction / 1000.0
+  
+  co2_pressure_mmHg <- tgp_co2_from_pressure(temp, sal, bp, co2_mole_fraction)
+  
+  co2_po_sto <- 100 * co2_pressure_mmHg / (co2_mole_fraction * (bp - calcVP(temp, sal)) * 760.0)
+  
+  co2_po_sto <- round(co2_po_sto, 2)
+  
+  return(co2_po_sto)
+}
+
+
+
+# TGP: N2 + Ar as in Colt ----
+
+tgp_n2_ar_from_pressure <- function(temp, sal, bp, delta_p, co2_mole_fraction, o2_ic) {
+  
+  co2_in_mg_per_L <- calc_CO2_gasSat_mg_L(temp, sal, bp, co2_mole_fraction)
+  
+  co2_in_mmHg <- (co2_in_mg_per_L / calcBunsen_Weiss('CO2', temp, sal)) * (0.760 / (MW_CO2 / MV_CO2))
+  
+  n2_ar_in_mmHg <- bp - delta_p - (tgpCalcO2Data(o2_ic, temp, sal, bp) + calcVP(temp, sal) + co2_in_mmHg)
+  
+  return(n2_ar_in_mmHg)
+}
+
+
+tgp_n2_ar_from_delta_pressure <- function(temp, sal, bp, delta_p, co2_mole_fraction) {
+  
+  co2_pressure_mmHg <- tgp_co2_from_pressure(temp, sal, bp)
+  
+  co2_delta_p <- co2_pressure_mmHg - co2_mole_fraction * (bp - calcVP(temp, sal)) * 760.0
+  
+  return(co2_delta_p)
+}
+
+
+tgp_n2_ar_from_percent <- function(temp, sal, bp, delta_p, co2_mole_fraction) {
+  
+  co2_pressure_mmHg <- tgp_co2_from_pressure(temp, sal, bp, co2_mole_fraction)
+  
+  co2_po_sto <- 100 * co2_pressure_mmHg / (co2_mole_fraction * (bp - calcVP(temp, sal)) * 760.0)
+  
+  co2_po_sto <- round(co2_po_sto, 2)
+  
+  return(co2_po_sto)
+}
+
+
+
+# ---- Compensation Depth ----
+
+# temp in K, sal in ppt
+# RETURN: pressure increase (mm Hg) per meter of depth
+getPressureIncreaseWithDepth <- function(temp_ic, sal_ic) {
+  
+  # ΔP(z) = 0 = tgp_mmHg - (bp_mmHg - g * rho * pascals_to_mmHg * z_in_meters)
+  # tgp_mmHg = bp_mmHg - g * rho * pascals_to_mmHg * z_in_meters
+  # (tgp_mmHg - bp_mmHg) / (- g * rho * pascals_to_mmHg) = z_in_meters
+  # z_in_meters = (tgp_mmHg - bp_mmHg) / (g * rho * pascals_to_mmHg)
+  # z_in_meters = ΔP(0) / (g * rho * pascals_to_mmHg)
+  
+  # z_in_meters = (bp_mmHg - tgp_mmHg) / (g * rho * pascals_to_mmHg)
+  
+  # g * rho * pascals_to_mmHg -> [kg/m^3] * [m / s^2] * [mm Hg / (kg / (m * s^2))]
+  # # 1 Pa = 1 kg/(m * s^2) = 0.00750062 mm Hg
+  #     -> [kg/(m^2 * s^2)] * [mm Hg / (kg / (m * s^2))]
+  #     -> [Pa / m] * [mm Hg / Pa] -> mm Hg / m
+  
+  pascals_to_mmHg <- 7.50062 * 10^(-3)  # conversion, Pa -> mm Hg
+  
+  g <- 9.8066                           # acceleration of gravity, m/s^2
+  
+  rho <- calcRho(temp_ic, sal_ic)       # density, kg/m^3
+  
+  mmHg_per_meter <- rho * g * pascals_to_mmHg
+  
+  # cat('in converter_gasses.R/getPressureIncreaseWithDepth(), factor = ',
+  #     mmHg_per_meter, ' mm Hg / m \n')
+  
+  return(mmHg_per_meter)
+}
+
+
+# At which depth is ΔP == 0 ?
+# return: meters
+# NB: tgp_ic is inconveniently as "%", not 'atm'
+#     23-VI-2017, changed to send mm Hg from calcTgpToAllUnits(), not IC value
+tgpCalcCompDepth <- function(tgp_mmHg, bp_ic, 
+                             temp_ic, sal_ic, 
+                             z_output_units) {
+  
+  # convert IC atm to mm Hg
+  # tgp_mmHg <- tgp_ic * 759.999952
+  
+  # convert BP from IC atm to mm Hg
+  bp_mmHg <- bp_ic * 759.999952
+  
+  mmHg_per_meter   <- getPressureIncreaseWithDepth(temp_ic, sal_ic)
+  
+  z_comp_in_meters <- (tgp_mmHg - bp_mmHg) / mmHg_per_meter
+  
+  # calc pressure with depth like thie...? ----
+  # tgp_mmHg <- z_comp_in_meters * mmHg_per_meter + bp_mmHg
+  # ΔP(z) <- z_comp_in_meters * mmHg_per_meter
+  
+  if('ft' == z_output_units) {
+    return(convertMetersToFtAndInches(z_comp_in_meters)[1])
+  } else if('in' == z_output_units) {
+    return(z_comp_in_meters * 39.370079)
+  } else
+    return(z_comp_in_meters)
+}
+
+
+
+
+# ---- BAROMETRIC ----
+
+# c('atm', 'mm Hg (torr)', 'mbar', 'kPa',
+#   'km', 'm', 'ft')
+# RETURN: atm
+calcBarometricToIcUnits <- function(val, units) {
+  
+  if('atm' == units) {
+    return(val)
+  }
+  
+  if('mm Hg (torr)' == units) {
+    return(val / 759.999952)
+  }
+
+  if('mbar' == units) {
+    return(val / 1013.25)
+  }
+
+  if('kPa' == units) {
+    return(val * 0.00986923267)
+  }
+
+  if('km' == units ||
+     'm'  == units ||
+     'ft' == units) {
+    p_kPa <- getPressureAtAltitude(val, units)
+    # 1 kPascal = 0.00986923267 atm
+    return(p_kPa * 0.00986923267)
+  }
+  
+}
+
+
+calcBarometricToAllUnits <- function(val, units) {
+  
+  # in atm
+  barometric_in_ic <- calcBarometricToIcUnits(val, units)
+  
+  atm  <- round(barometric_in_ic, 4)
+  mmHg <- round(barometric_in_ic * 759.999952, 4)
+  mbar <- round(barometric_in_ic * 1013.25, 4)
+  kPa  <- round(barometric_in_ic / 0.00986923267, 4)
+  
+  atm  <- formatC(atm, format='f', digits=2)
+  mmHg <- formatC(mmHg, format='f', digits=2)
+  mbar <- formatC(mbar, format='f', digits=2)
+  kPa  <- formatC(kPa, format='f', digits=2)
+  
+  df <- data.frame(vals = c(atm, mmHg, mbar, kPa),
+                   
+                   units = c('atm', 'mm Hg (torr)', 'mbar', 'kPa'),
+                   
+                   # NB: ** NEED ** "stringsAsFactors = FALSE" to quell...
+                   # Warning in `[<-.factor`(`*tmp*`, idx_s, value = "<strong><i>33.00</i></strong>") :
+                   # invalid factor level, NA generated
+                   # when print
+                   stringsAsFactors = FALSE
+  )
+  
+  return(df)
+}
+
+
+
+altitudeToIcMeters <- function(altVal, altUnits) {
+  
+  if('m' == altUnits)
+    return(altVal)
+  
+  if('km' == altUnits)
+    return(altVal * 1000.0)
+  
+  if('ft' == altUnits)
+    return(altVal * (1 / 3.280839895))  # " * 0.3048 "
+}
+
+
+# return kPa
+# divide by 0.13332239 to get mm Hg
+getPressureAtAltitude <- function(altVal, altUnits) {
+  
+  if('m' != altUnits)
+    altVal <- altitudeToIcMeters(altVal, altUnits)
+  
+  # return(calcPressureAtAltitudeInMeters(altVal))
+  return(calcPressureAtAltitudeInMeters_alternative(altVal))
+}
+
+
+# see: Boyd, p. 4
+# input meters, output mm Hg
+getPressureAtAltitude_colt <- function(alt_in_meters) {
+  
+  BP <- 10^(2.880814 - (alt_in_meters / 19748.2))
+  
+  cat('in converter_gasses.R/getPressureAtAltitude_colt ... ', 
+      alt_in_meters, ' m ~= ', BP, ' mm Hg \n')
+  
+  return(BP)
+}
+
+
+# ** NB: result in STANDARD ATMOSPHERES
+# Using ISA standards, defaults for pressure and temperature 
+# at sea level are 101,325 Pa and 288 K
+
+# see: http://www.mide.com/pages/air-pressure-at-altitude-calculator
+# P <- Pb * ( 1 + (Lb / Tb) * (h - hb)) ^ ((-go * M) / (R * b))
+# 
+# Pb = static pressure (pressure at sea level) [Pa]
+# Tb = standard temperature (temperature at sea level) [K]
+# Lb = standard temperature lapse rate [K/m] = -0.0065 [K/m]
+# h  = height above sea level [m]
+# hb = height at the bottom of atmospheric layer [m]
+# R  = universal gas constant = 8.31432 [(N * m) / (mol * K)] -- ~ 0.082057463 (L * atm) / (mol * K)
+# go = gravitational acceleration constant = 9.80665 [m/s^2]
+# M  = molar mass of Earth’s air = 0.0289644 [kg/mol]
+
+# RETURN kPa
+# 1 Pascal = 0.00000986923267 atm
+# 101325 Pa = 1 atm
+# 1 mm Hg = 133.32239 Pa
+
+# "At 1000ft, the standard barometric pressure is 98 kPa (734 mmHg). 
+# This means that there is 97% of the oxygen available at sea level."
+# calcPressureAtAltitudeInMeters_alternative <- function(altVal_in_meters, temp_at_sealevel) {
+calcPressureAtAltitudeInMeters_alternative <- function(altVal_in_meters) {
+  
+  hb <- 0 # ???
+  
+  Pb <- 101325
+  Tb <- 288
+  # Tb <- temp_at_sealevel
+  Lb <- -0.0065
+  
+  R <- 8.31432
+    
+  go <- 9.80665
+  M <- 0.0289644
+  
+  P <- Pb * ( 1 + (Lb / Tb) * (altVal_in_meters - hb)) ^ ((-go * M) / (R * Lb))
+  
+  return(P / 1000)
+}
+
+# RETURN atm
+calcPressureAtAltitudeInMeters <- function(altVal) {
+  
+  return(exp(5.25 * log(1.0 - ((altVal / 1000.0) / 43.3))))
+}
+
+
+
+# ---- GENERAL GAS SATURATION METHOD ----
+
+# ** O2 coefficients from Table 1 of Garcia & Gordon (1992) 
+# ** fit to Benson and Krause (1984)
+# ** temp in K, sal in psu, pressure in...bar?? or atm??
+# ** RETURN: μmol/kg
+
+calcGasSat <- function(gas_type, temp, sal, bp_atm) {
+  
+  temp_K <- temp
+  
+  # ** re-convert input temp in K to C
+  temp_C <- temp_K - 273.15
+  
+  # ** convert mm Hg to atm
+  # bp_atm <- bp_mm_Hg / 759.999952
+  
+  # *** Calc equilibrium O2 at 1 atm
+  
+  # ** calc Garcia & Gordon's scaled temperature, Ts
+  TS <- log((298.15 - temp_C) / (273.15 + temp_C))
+  
+  # sat_coefs (in converter_gasses.R) from Garcia & Gordon (2004), L&O 37: 1307
+  my_gas_col_idx <- which(names(sat_coefs) == gas_type)
+  
+  a_coefs <- sat_coefs %>% filter(code == 'a') %>% dplyr::select(my_gas_col_idx)
+  a_coefs <- as.vector(a_coefs[, 1], mode = 'numeric')
+  b_coefs <- sat_coefs %>% filter(code == 'b') %>% dplyr::select(my_gas_col_idx)
+  b_coefs <- as.vector(b_coefs[, 1], mode = 'numeric')
+  c_coefs <- sat_coefs %>% filter(code == 'c') %>% dplyr::select(my_gas_col_idx)
+  c_coefs <- as.vector(c_coefs[, 1], mode = 'numeric')
+  
+  
+  aFactor <- a_coefs[1] + a_coefs[2] * TS
+  aFactor <- aFactor + a_coefs[3] * TS * TS
+  aFactor <- aFactor + a_coefs[4] * TS^3
+  aFactor <- aFactor + a_coefs[5] * TS^4
+  aFactor <- aFactor + a_coefs[6] * TS^5
+  
+  bFactor <- b_coefs[1] - b_coefs[2] * TS
+  bFactor <- bFactor + b_coefs[3] * TS * TS
+  bFactor <- bFactor + b_coefs[4] * TS^3
+  
+  cFactor <- c_coefs[1] * 10^(-7)
+  
+  # ** Corrected Eqn (8) of Garcia and Gordon 1992
+  # ** conc_O2  = A0_o2 + A1_o2*temp_S + A2_o2*temp_S.^2 + A3_o2*temp_S.^3 + A4_o2*temp_S.^4 + A5_o2*temp_S.^5;
+  # ** conc_O2 += S.*(B0_o2 + B1_o2*temp_S + B2_o2*temp_S.^2 + B3_o2*temp_S.^3);
+  # ** conc_O2 += C0_o2*S.^2;
+  # ** conc_O2  = exp(conc_O2);
+  myGasSat <- aFactor + bFactor * sal + cFactor * sal * sal
+  myGasSat <- exp(myGasSat)
+  # ** [CHECK VALUE] ...:  μmol/kg-SW
+  # cat('exp(myO2Sat) = ', myGasSat, '\n')
+  # 
+  # cat("in GasCalc/calcO2SatForTemp, equilibrium O2 at 1 atm = ", myGasSat, "μmol/kg-SW\n")
+  # cat("in GasCalc/calcO2SatForTemp, equilibrium O2 at 1 atm = ", myGasSat * 0.0319988, "mg/kg-SW\n")
+  
+  # *** END Calc equilibrium O2 [μmol/kg-SW] at 1 atm
+  
+  # NB: Further calc DEPENDS on myO2Sat in mg/l, eh?
+  
+  # NB: Now have 'pressure' coming in as METERS > sea-level
+  # double myPressureInAtm = [self calcPofAltitude:0.0];        //getPofAltitude(pressure);
+  # //    double myPressureInAtm = [self calcPofAltitude:pressure];   //getPofAltitude(pressure);
+  
+  # *** [START] REMOVED WHEN ADD @ bp ***
+  
+  # myPressureInAtm <- calcPressureAtAltitudeInMeters_alternative(pressure)
+  
+  # convert myPressureInAtm inkPa to atm: 101325 Pa = 1 atm
+  # myPressureInAtm <- myPressureInAtm / 101.325  # kPa, no?
+  
+  # *** [END] REMOVED WHEN ADD @ bp ***
+  
+  # # myPressureInAtm <- calcPressureAtAltitudeInMeters(pressure)
+  
+  # NB: BACK TO KELVIN !! calcVP(temp, sal)
+  myVaporPressure <- calcVP(temp_K, sal) # getVP(temp, sal);
+  
+  # NB: NOT of P, too?
+  # NB: Temp in C
+  myTheta <- calcThetaForTemp(temp_C)      # getTheta(temp);   // NB: NOT of S, P, too?
+  
+  factor1 <- 1.0 - (myVaporPressure / bp_atm)
+  factor2 <- 1.0 - myVaporPressure
+  factor3 <- 1.0 - (myTheta * bp_atm)
+  factor4 <- 1.0 - myTheta
+  
+  # ***** convert to μmol O2/liter (rho/1000 returns kg/l)
+  # ***** what about...pressure!? (not very compressible, alors...)
+  # ** NB: BECAUSE this O2 sat method requires input temp in Celcius and 'real' CarbCalc
+  # **     methods expect temp in Kelvin, must re-convert to K here
+  # //    myO2Sat *= [self calcRhoOfTemp:(temp+273.15) sal:sal] / 1000.0;
+  
+  # ***** convert HERE to mg O2/liter (or mg O2/kg-soln) from...mmol?
+  # ***** later, implement via units combo box
+  # //    myO2Sat *= 0.0319988;
+  #    NSLog(@"myO2Sat = %g",myO2Sat);
+  
+  # myO2Sat <- myO2Sat * myPressureInAtm * (factor1 / factor2) * (factor3 / factor4)
+  myGasSat <- myGasSat * bp_atm * (factor1 / factor2) * (factor3 / factor4)
+  
+  # [CHECK] with next two lines...
+  # check_6pt410459 <- calcSat_O2(273.15 + 30, 30, 0) * 0.0319999 * calcRho(273.15 + 30, 30) / 1000.0
+  # cat("in GasCalc/calcO2SatForTemp, MY_O2_SAT = ", myO2Sat, "μmol/kg-SW --> ", check_6pt410459," mg/L \n")
+  
+  return(myGasSat)  # μmol/kg
+  
+}
+
+
+
+# PURE O2 saturation ----
+# à la calc in "* Smolt - Design Example & gasses" (in Excel & Numbers)
+calcPureO2Sat <- function(ic_temp, ic_sal, ic_bp) {
+  
+  ic_vp  <- calcVP(ic_temp, ic_sal)    # in atm
+  
+  bunsen <- calcBunsen('O2', ic_temp, ic_sal)  # L / L.atm
+  
+  # cat('          ic_vp = ', ic_vp * 760, ' mm Hg \n')
+  # cat('         bunsen = ', bunsen, '\n')
+  # cat('(MW_O2 / MV_O2) = ', MW_O2 / MV_O2, '\n')
+  # cat('(ic_bp - ic_vp) = ', ic_bp - ic_vp, ' atm \n')
+  
+  # pure O2 sat in mg/L
+  pure_o2_sat <- 1000.0 * bunsen * (MW_O2 / MV_O2) * 1.0 * (ic_bp - ic_vp)
+  
+  return(pure_o2_sat)
+}
+
+
+# ---- GENERAL BUNSEN METHOD ----
+
+# alternate Bunsen?? ----
+# see: Hamme & Emerson's (2004), p. 1526
+# C[mol/kg] * MV[L/mol] * rho[kg/L] * (1 + VP[atm]) / dry χ[1]
+
+# > (calcGasSat('N2', 273.15 + 10, 35, 1) / 10^6) * 
+#   MV_N2 * 
+#   (calcRho(273.15 + 10, 35) / 1000.0) * 
+#   (1 + calcVP(273.15 + 10, 35)) 
+# / MFV_N2
+# [1] 0.01493413  -- with VP > 0
+
+# (calcGasSat('N2', 273.15 + 10, 35, 1) / 10^6) * MV_N2 * (calcRho(273.15 + 10, 35) / 1000.0) * (1 + 0) / MFV_N2
+# [1] 0.01475883  -- with VP = 0
+
+# vs.
+
+# > calcBunsen('N2', 273.15 + 10, 35)
+# [1] 0.01477638
+
+# see: https://srdata.nist.gov/solubility/IUPAC/SDS-27-28/SDS-27-28-intro_12.pdf
+# The Bunsen coefficient is defined as the volume of gas reduced to 273.l5K
+# and 1 atmosphere pressure which is absorbed by unit volume of solvent 
+# (at the temperature of measurement) under a partial pressure of 1 atmosphere.
+# If ideal gas behavior and Henry's law are assumed to be obeyed, then
+
+
+# Weiss, R. F. from "The Solubility of N2, O2, and Ar in Water and Seawater", 
+# Deep-Sea Research, Vol. 17, pp. 721-735, 1970.
+# return: mL(gas)/L(water)-mbar or ~L/L-atm
+
+# NB: [DEPRECATED] ----
+#     changed 'old' calcBunsen() to calcBunsen_Weiss()
+#       in favor of...
+#          O2: Benson & Krause (1980) & Benson & Krause (1984) for seawater
+#          N2 & Ar: Hamme & Emerson (2004), Eqn. 1.16
+# Nb: NEW calcBunsen() is immediately below this deprecatedd funcion
+calcBunsen_Weiss <- function(gas_type, temp, sal) {
+  
+  # Bunsen for CO2 handled differently
+  if('CO2' == gas_type)
+    return(calcBunsen_CO2(temp, sal))
+  
+  my_gas_col_idx <- which(names(bunsen_coefs) == gas_type)
+  
+  a_coefs <- bunsen_coefs %>% filter(code == 'a') %>% dplyr::select(my_gas_col_idx)
+  a_coefs <- as.vector(a_coefs[, 1], mode = 'numeric')
+  b_coefs <- bunsen_coefs %>% filter(code == 'b') %>% dplyr::select(my_gas_col_idx)
+  b_coefs <- as.vector(b_coefs[, 1], mode = 'numeric')
+  
+  Tover100 <- temp / 100.0
+  
+  lnbeta <- a_coefs[1] + a_coefs[2] / Tover100 + a_coefs[3] * log(Tover100) + 
+    sal * (b_coefs[1] + b_coefs[2] * Tover100 + b_coefs[3] * Tover100 * Tover100)
+  
+  beta <- exp(lnbeta)   # units: mL(gas)/L(water)-mbar or ~L/L-atm
+  
+  return(beta)
+}
+
+
+# [NEW] Bunsen coefficient calculation ----
+#       Instead of Weiss, use...
+#          O2: Benson & Krause (1980) & Benson & Krause (1984) for seawater
+#          N2 & Ar: Hamme & Emerson (2004), Eqn. 1.16
+calcBunsen <- function(gas_type, temp, sal) {
+  
+  # NB: CHANGE THIS TO CONFORM TO COLT'S BOOK?
+  # Bunsen for CO2 handled differently
+  if('CO2' == gas_type)
+    return(calcBunsen_CO2(temp, sal))
+  
+  else if ('O2' == gas_type)
+    return(calcBunsen_O2_Colt(temp, sal))
+  
+  else if ('N2' == gas_type)
+    return(calcBunsen_N2_Colt(temp, sal))
+  
+  else if ('Ar' == gas_type)
+    return(calcBunsen_Ar_Colt(temp, sal))
+  
+  else
+    return()
+}
+
+
+# ---- VAPOR PRESSURE ----
+
+# ** input temp WAS in Celcius, but I.C. iQauCalc "Shiny" temp, as in CarbCalc, is K
+# ** calcVPForTemp() is called from ... calcXxSatForTemp:sal;pressure:
+# 
+#   http://cdiac.ornl.gov/oceans/ndp_047/datareq047.html
+# The vapor pressure of seawater is generally calculated from temperature and salinity data. 
+# One method of calculation is given by Weiss and Price (1980) in which one equation is used to assess 
+# the saturation vapor pressure over seawater. 
+# They combined the vapor pressure algorithm for pure water of Goff and Gratch (1946) with equations 
+# for vapor pressure lowering by sea salt given by Robinson (1954) and fit a polynomial in 
+# temperature and salinity over the range 273 to 313K and 0 to 40 ppt salinity:
+#   
+#   ln psw = 24.4543 - 67.4509 * (100/T) - 4.8489 * ln(T/100) - 0.000544 * S
+# 
+# where:
+#   psw is the vapor pressure of seawater 
+#     T is the temperature in Kelvin 
+#     S is the salinity in ppt
+# 
+# For natural seawater systems, the salinity correction is small. 
+# If, for example, salinity were assumed to be 0 instead of 33 psu (at 25 °C), 
+# the error in vapor pressure would be 1.8%, giving rise to a 0.06% error in calculating 
+# in situ gas fugacity for a measured mole fraction of 350 ppm.
+# 
+# vs. FW formula in spreadsheet: =EXP(11.8571-(3840.7/C13)-(216961/C13^2))
+
+
+# result: atm
+calcVP <- function(temp, sal) {
+  # ***** (SW) vapor pressure [atm], Weiss & Price (1980)
+  # ***** and...pressure?    
+  # myVP <- 0.0
+  
+  # NO! SEND TEMP IN K, NOT C
+  # temp <- temp + 273.15
+  
+  a <-  24.4543
+  b <- -67.4509
+  c <- - 4.8489
+  d <- - 0.000544
+  
+  myVP <- a + 100.0 * b / temp
+  myVP <- myVP + c * log(temp / 100.0)
+  myVP <- myVP + d * sal
+  
+  return(exp(myVP))
+}
+
+
+# ---- THETA ----
+
+# used here to convert O2 saturation to altitude
+# NB: Temp in C, this called from within calcGasSat()
+# sse: Benson & Krause (1980), p. 664
+
+# ***** NB: how related to Bunsen coefficient? *****
+  
+# Benson & Krause (1980), Eqn. 13
+calcThetaForTemp <- function(temp) {
+  
+  # ** re-convert input temp in K to C for theta calculation
+  temp_C <- temp - 273.15
+  
+  theta <- 0.000975 - 0.00001426 * temp_C
+  theta <- theta + 0.00000006436 * temp_C * temp_C
+  # theta <- theta + 0.006436 * temp * temp
+  
+  return(theta)
+}
+
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++
+
+# >> COLT BOOK << ----
+
+compare_iQuaCalc_to_colt_gasCalc <- function(temp, sal) {
+  
+  o2_iQC  <- calcGasSat('O2', temp, sal, 1)
+  # calcSat_O2(temp, sal, 0, 760)
+  o2_colt <- calcSolubility_O2_Colt(temp, sal)
+  
+  n2_iQC  <- calcGasSat('N2', temp, sal, 1)
+  n2_colt <- calcSolubility_N2_Colt(temp, sal)
+  
+  ar_iQC  <- calcGasSat('Ar', temp, sal, 1)
+  ar_colt <- calcSolubility_Ar_Colt(temp, sal)
+  
+  
+  o2_bunsen_iQC  <- calcBunsen('O2', temp, sal)
+  o2_bunsen_colt <- calcBunsen_O2_Colt(temp, sal)
+  
+  n2_bunsen_iQC  <- calcBunsen('N2', temp, sal)
+  n2_bunsen_colt <- calcBunsen_N2_Colt(temp, sal)
+  
+  ar_bunsen_iQC  <- calcBunsen('Ar', temp, sal)
+  ar_bunsen_colt <- calcBunsen_Ar_Colt(temp, sal)
+  
+  
+  cat('\n++++++++++ Solubility, iQuaCalc vs. Colt +++++++++++ \n')
+  cat('At  ', temp, ' K & ', sal, ' ppt, in μmol/kg \n')
+  cat('------------------------------------------------------\n')
+  cat('O2: ', o2_iQC, ' vs. ', o2_colt, '\n')
+  cat('N2: ', n2_iQC, ' vs. ', n2_colt, '\n')
+  cat('Ar: ', ar_iQC, ' vs. ', ar_colt, '\n\n')
+  cat('\n++++++++++   Bunsen, iQuaCalc vs. Colt   +++++++++++ \n')
+  cat('O2: ', o2_bunsen_iQC, ' vs. ', o2_bunsen_colt, '\n')
+  cat('N2: ', n2_bunsen_iQC, ' vs. ', n2_bunsen_colt, '\n')
+  cat('Ar: ', ar_bunsen_iQC, ' vs. ', ar_bunsen_colt, '\n\n')
+  cat('++++++++++ ------------------------------ +++++++++++ \n\n')
+
+}
+
+# salinity factor & henry ----
+# Benson & Krause (1984), Eqn. 8
+#  return: g/kg
+calcSalinityFactor <- function(sal) {
+  
+  # mean gram-molecular masses of water & sea salt, g/mol (Millero, 1982)
+  # 0.716582 = (1 - (M_w / M_s) * b)
+  
+  return(1000.0 - 0.716582 * sal)
+}
+
+calcSalinityFactor_with_temp <- function(temp, sal) {
+  
+  f <- exp(-sal * (0.017674 - (10.754 / temp) + (2140.7 / temp^2)))
+  
+  return(f)
+}
+
+
+# Benson & Krause (1984), Eqn 30
+# return: atm
+calcHenry_O2_BensonKrause <- function(temp, sal) {
+  
+  a <-       3.71814
+  b <-    5596.17
+  c <- 1049668
+  d <-       0.0225034
+  e <-      13.6083
+  f <-    2565.68
+  
+  my_exponent <- a + (b / temp) - (c / (temp * temp))
+  
+  my_exponent <- my_exponent + sal * (d - (e / temp) + (f / (temp * temp)))
+  
+  return(exp(my_exponent))
+}
+
+
+# BUNSEN O2 ----
+# Benson & Krause (1980)
+# Benson & Krause (1984) for seawater
+# see Colt's book, p. 259
+# return: L (real) / L * atm
+
+calcBunsen_O2_Colt <- function(temp, sal) {
+  
+  # convert beta to 
+  conversion_factor <- 1.24293 * 10^3  # has 10^4 on p. 260, Eqn A-17 ??
+  
+  # salinity factor (divide by 1000.0 for Bunsen in L/L*atm)
+  f <- calcSalinityFactor(sal) / 1000.0
+  
+  theta <- calcThetaForTemp(temp)
+  
+  # calcRho() returns: kg/m3 (g/L)
+  # [kg/m3] / [1000 L/m3] -> [kg/L]
+  rho <- calcRho(temp, sal) / 1000.0
+  
+  bunsen <- conversion_factor * (rho * f / calcHenry_O2_BensonKrause(temp, sal))
+  
+  bunsen <- bunsen * (1 - theta * (1 + calcVP(temp, sal)))
+  
+  return(bunsen)
+}
+
+
+# BUNSEN N2 & Ar ----
+# Hamme & Emerson (2004), Eqn. 1.16
+
+calcBunsen_N2_Colt <- function(temp, sal) {
+  
+  num <- (calcRho(temp, sal) / 1000.0) * calcSolubility_N2_Colt(temp, sal) * 10^(-6) * MV_N2
+  
+  denom <- (1 - calcVP(temp, sal)) * MFV_N2
+  
+  return(num / denom)
+}
+
+
+calcBunsen_Ar_Colt <- function(temp, sal) {
+  
+  num <- (calcRho(temp, sal) / 1000.0) * calcSolubility_Ar_Colt(temp, sal) * 10^(-6) * MV_AR
+  
+  denom <- (1 - calcVP(temp, sal)) * MFV_AR
+  
+  return(num / denom)
+}
+
+
+# SOLUBILITIES ----
+
+# O2 Solubility ----
+# see: http://www.helcom.fi/Documents/Action%20areas/Monitoring%20and%20assessment/Manuals%20and%20Guidelines/Manual%20for%20Marine%20Monitoring%20in%20the%20COMBINE%20Programme%20of%20HELCOM_PartB_AnnexB8_Appendix3.pdf
+calcSolubility_O2_Colt <- function(temp, sal) {
+  
+  a <- -135.29996
+  b <-    1.572288 * 10^5
+  c <-   -6.637149 * 10^7
+  d <-    1.243678 * 10^10
+  e <-   -8.621061 * 10^11
+  
+  f <-    0.020573
+  g <-  -12.142
+  h <- 2363.1
+  
+  a_terms <- a + (b / temp) + (c / (temp^2)) + (d / (temp^3)) + (e / (temp^4))
+  
+  b_terms <- sal * (f + (g / temp) + (h / (temp^2)))
+  
+  return(exp(a_terms - b_terms))
+}
+
+
+
+# Benson & Krause (1984), Eqn. 22
+# Where's the error?
+# return: μmol/kg
+calcSolubility_O2_Colt_QUE <- function(temp, sal) {
+  
+  # x <- 0.999025 + 1.426 * 10^(-5) * temp - 6.436 * 10^(-3) * temp^2
+  # o2_sol_num   <- calcSalinityFactor(sal) * (1 - calcVP(temp, sal)) * x
+  
+  # mean molecular mass of WATER -- !(sea salt), as in Colt
+  M_w <- 67.7933                                  # g/mol
+  
+  sal_factor <- calcSalinityFactor(sal)                # g/kg
+  sal_factor_t <- calcSalinityFactor_with_temp(temp, sal)
+  
+  vp         <- calcVP(temp, sal)                      # atm
+  
+  theta      <- calcThetaForTemp(temp)                 # --
+  
+  henry      <- calcHenry_O2_BensonKrause(temp, sal)   # atm
+  
+  o2_sol_num   <- sal_factor * (1 - vp) * (1 - theta)      # [g/kg]*[atm]*[--]
+  
+  o2_sol_denom <- henry * M_w                              # [g/mol]*[atm]
+  
+  o2_sol <- MFV_O2 * (o2_sol_num / o2_sol_denom)           # mol/kg
+  
+  cat('      MFV_O2 = ', MFV_O2, ' \n')
+  cat('  sal_factor = ', sal_factor, ' g/kg \n')
+  cat('sal_factor_t = ', sal_factor_t, '  \n')
+  cat('          vp = ', vp, ' atm \n')
+  cat('       theta = ', theta, '\n')
+  cat('       henry = ', henry, ' atm \n')
+  cat('  o2_sol_num = ', o2_sol_num, '\n')
+  cat('o2_sol_denom = ', o2_sol_denom, '\n')
+  
+  return(o2_sol * 10^6)                           # μmol/kg
+}
+
+
+
+# N2 Solubility ----
+# Hamme & Emerson (2004), Eqn. 1
+# return: μmol/kg
+calcSolubility_N2_Colt <- function(temp, sal) {
+  
+  a_0 <-  6.42931
+  a_1 <-  2.92704
+  a_2 <-  4.32531
+  a_3 <-  4.69149
+  
+  b_0 <- -0.00744129
+  b_1 <- -0.00802566
+  b_2 <- -0.0146775
+  
+  # ** re-convert input temp in K to C for scaled temperature
+  temp_C <- temp - 273.15
+  
+  t_scaled <- log((298.15 - temp_C) / (273.15 + temp_C))
+  
+  a_terms <- a_0 + a_1 * t_scaled + a_2 * t_scaled * t_scaled + a_3 * t_scaled^3
+  
+  b_terms <- sal * (b_0 + b_1 * t_scaled + b_2 * t_scaled * t_scaled)
+  
+  return(exp(a_terms + b_terms))
+}
+
+
+# Ar Solubility ----
+# Hamme & Emerson (2004)
+calcSolubility_Ar_Colt <- function(temp, sal) {
+  
+  a_0 <-  2.79150
+  a_1 <-  3.17609
+  a_2 <-  4.13116
+  a_3 <-  4.90379
+  
+  b_0 <- -0.00696233
+  b_1 <- -0.007666670
+  b_2 <- -0.0116888
+  
+  # ** re-convert input temp in K to C for scaled temperature
+  temp_C <- temp - 273.15
+  
+  t_scaled <- log((298.15 - temp_C) / (273.15 + temp_C))
+  
+  a_terms <- a_0 + a_1 * t_scaled + a_2 * t_scaled * t_scaled + a_3 * t_scaled^3
+  
+  b_terms <- sal * (b_0 + b_1 * t_scaled + b_2 * t_scaled * t_scaled)
+  
+  return(exp(a_terms + b_terms))
+}
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+# ---- LEGACY CODE ----
+
+# ---- O2 SATURATION
+# # Garcia & Gordon (2004), L&O 37: 1307
+# ** NB: 'pressure' refers to z > 0, but now z == 0
+# ** NB: 'barometric' refers to barometric pressure
+# **                  input -- icValuePref units, mm Hg,
+# **                           converted to atm for calculation
+# **     output as...μmol/kg
+
+calcSat_O2 <- function(temp, sal, pressure, bp) {
+  
+  # ** re-convert input temp in K to C
+  temp <- temp - 273.15
+  
+  # ** convert mm Hg to atm
+  bp <- bp / 759.999952
+  
+  # *** Calc equilibrium O2 at 1 atm
+  
+  # ** calc Garcia & Gordon's scaled temperature, Ts
+  TS <- log((298.15 - temp) / (273.15 + temp))
+  
+  aFactor <- 5.80871 + 3.20291 * TS
+  aFactor <- aFactor + 4.17887 * TS * TS
+  aFactor <- aFactor + 5.10006 * TS^3
+  aFactor <- aFactor + (-0.0986643) * TS^4
+  aFactor <- aFactor + 3.80369 * TS^5
+  
+  bFactor <- -0.00701577 - 0.00770028 * TS
+  bFactor <- bFactor + (-0.0113864) * TS * TS
+  bFactor <- bFactor + (-0.00951519) * TS^3
+  
+  cFactor <- -2.75915 * 10^(-7)
+  
+  # ** Corrected Eqn (8) of Garcia and Gordon 1992
+  # ** conc_O2  = A0_o2 + A1_o2*temp_S + A2_o2*temp_S.^2 + A3_o2*temp_S.^3 + A4_o2*temp_S.^4 + A5_o2*temp_S.^5;
+  # ** conc_O2 += S.*(B0_o2 + B1_o2*temp_S + B2_o2*temp_S.^2 + B3_o2*temp_S.^3);
+  # ** conc_O2 += C0_o2*S.^2;
+  # ** conc_O2  = exp(conc_O2);
+  myO2Sat <- aFactor + bFactor * sal + cFactor * sal * sal
+  myO2Sat <- exp(myO2Sat)
+  # ** [CHECK VALUE] ...:  μmol/kg-SW
+  # cat('exp(myO2Sat) = ', myO2Sat, '\n')
+  # 
+  # cat("in GasCalc/calcO2SatForTemp, equilibrium O2 at 1 atm = ", myO2Sat, "μmol/kg-SW\n")
+  # cat("in GasCalc/calcO2SatForTemp, equilibrium O2 at 1 atm = ", myO2Sat * 0.0319988, "mg/kg-SW\n")
+  
+  # *** END Calc equilibrium O2 [μmol/kg-SW] at 1 atm
+  
+  # NB: Further calc DEPENDS on myO2Sat in mg/l, eh?
+  
+  # NB: Now have 'pressure' coming in as METERS > sea-level
+  # double myPressureInAtm = [self calcPofAltitude:0.0];        //getPofAltitude(pressure);
+  # //    double myPressureInAtm = [self calcPofAltitude:pressure];   //getPofAltitude(pressure);
+  
+  # *** [START] REMOVED WHEN ADD @ bp ***
+  
+  # myPressureInAtm <- calcPressureAtAltitudeInMeters_alternative(pressure)
+  
+  # convert myPressureInAtm inkPa to atm: 101325 Pa = 1 atm
+  # myPressureInAtm <- myPressureInAtm / 101.325  # kPa, no?
+  
+  # *** [END] REMOVED WHEN ADD @ bp ***
+  
+  # # myPressureInAtm <- calcPressureAtAltitudeInMeters(pressure)
+  
+  # NB: BACK TO KELVIN !! calcVP(temp, sal)
+  myVaporPressure <- calcVP(temp + 273.15, sal) # getVP(temp, sal);
+  
+  # NB: NOT of P, too?
+  # NB: Temp in C
+  myTheta <- calcThetaForTemp(temp)      # getTheta(temp);   // NB: NOT of S, P, too?
+  
+  # cat("in GasCalc/calcO2SatForTemp,  P at", pressure," = ", myPressureInAtm, "atm\n")
+  # cat("in GasCalc/calcO2SatForTemp,  P at", pressure, " = ", myPressureInAtm * 759.999952 , "mm Hg\n")
+  # cat("in GasCalc/calcO2SatForTemp,  P at", pressure," = ", bp, "atm\n")
+  # cat("in GasCalc/calcO2SatForTemp,  P at", pressure, " = ", bp * 759.999952 , "mm Hg\n")
+  # cat("in GasCalc/calcO2SatForTemp, VP at", temp, ', ', sal, ' = ', myVaporPressure, "atm\n")
+  # cat("in GasCalc/calcO2SatForTemp,  θ at", temp, " = ", myTheta, "\n")
+  
+  # factor1 <- 1.0 - (myVaporPressure / myPressureInAtm)
+  factor1 <- 1.0 - (myVaporPressure / bp)
+  factor2 <- 1.0 - myVaporPressure
+  # factor3 <- 1.0 - (myTheta * myPressureInAtm)
+  factor3 <- 1.0 - (myTheta * bp)
+  factor4 <- 1.0 - myTheta
+  
+  # cat("in GasCalc/calcO2SatForTemp", myPressureInAtm, ' - ' , myVaporPressure, ' = ', myPressureInAtm - myVaporPressure, "atm\n")
+  # cat("in GasCalc/calcO2SatForTemp", bp, ' - ' , myVaporPressure, ' = ', bp - myVaporPressure, "atm\n")
+  
+  # ***** convert to μmol O2/liter (rho/1000 returns kg/l)
+  # ***** what about...pressure!? (not very compressible, alors...)
+  # ** NB: BECAUSE this O2 sat method requires input temp in Celcius and 'real' CarbCalc
+  # **     methods expect temp in Kelvin, must re-convert to K here
+  # //    myO2Sat *= [self calcRhoOfTemp:(temp+273.15) sal:sal] / 1000.0;
+  
+  # ***** convert HERE to mg O2/liter (or mg O2/kg-soln) from...mmol?
+  # ***** later, implement via units combo box
+  # //    myO2Sat *= 0.0319988;
+  #    NSLog(@"myO2Sat = %g",myO2Sat);
+  
+  # myO2Sat <- myO2Sat * myPressureInAtm * (factor1 / factor2) * (factor3 / factor4)
+  myO2Sat <- myO2Sat * bp * (factor1 / factor2) * (factor3 / factor4)
+  
+  # [CHECK] with next two lines...
+  # check_6pt410459 <- calcSat_O2(273.15 + 30, 30, 0) * 0.0319999 * calcRho(273.15 + 30, 30) / 1000.0
+  # cat("in GasCalc/calcO2SatForTemp, MY_O2_SAT = ", myO2Sat, "μmol/kg-SW --> ", check_6pt410459," mg/L \n")
+  
+  return(myO2Sat)  # μmol/kg
+  
+}
+
+
+
+# ---- N2 SATURATION
+
+calcSat_N2 <- function(temp, sal, pressure) {
+  
+  # ** re-convert input temp in K to C
+  temp = temp - 273.15
+  
+  # *** Calc equilibrium N2 at 1 atm
+  
+  # *** Calc equilibrium N2 at 1 atm, Hamme & Emerson's (2004), Table 4
+  # ** calc Garcia & Gordon's scaled temperature, Ts
+  TS <- log((298.15 - temp) / (273.15 + temp))
+  
+  aFactor <- 6.42931 + 2.92704 * TS
+  aFactor <- aFactor + 4.32531 * TS * TS
+  aFactor <- aFactor + 4.69149 * TS^3
+  
+  bFactor <- -0.00744129 - 0.00802566 * TS
+  bFactor <- bFactor + (-0.0146775) * TS * TS
+  
+  myN2Sat <- aFactor + bFactor * sal
+  myN2Sat <- exp(myN2Sat)
+  
+  
+  # ** Corrected Eqn (8) of Garcia and Gordon 1992
+  # ** conc_O2  = A0_o2 + A1_o2*temp_S + A2_o2*temp_S.^2 + A3_o2*temp_S.^3 + A4_o2*temp_S.^4 + A5_o2*temp_S.^5;
+  # ** conc_O2 += S.*(B0_o2 + B1_o2*temp_S + B2_o2*temp_S.^2 + B3_o2*temp_S.^3);
+  # ** conc_O2 += C0_o2*S.^2;
+  # ** conc_O2  = exp(conc_O2);
+  myO2Sat <- aFactor + bFactor * sal + cFactor * sal * sal
+  myO2Sat <- exp(myO2Sat)
+  # ** [CHECK VALUE] ...:  μmol/kg-SW
+  
+  # cat("in GasCalc/calcO2SatForTemp, equilibrium O2 at 1 atm = ", myO2Sat, "μmol/kg-SW\n")
+  # cat("in GasCalc/calcO2SatForTemp, equilibrium O2 at 1 atm = ", myO2Sat * 0.0319988, "mg/kg-SW\n")
+  
+  # *** END Calc equilibrium O2 [μmol/kg-SW] at 1 atm
+  
+  # NB: Further calc DEPENDS on myO2Sat in mg/l, eh?
+  
+  # NB: Now have 'pressure' coming in as METERS > sea-level
+  # double myPressureInAtm = [self calcPofAltitude:0.0];        //getPofAltitude(pressure);
+  # //    double myPressureInAtm = [self calcPofAltitude:pressure];   //getPofAltitude(pressure);
+  
+  myPressureInAtm <- calcPressureAtAltitudeInMeters_alternative(pressure)
+  
+  # convert myPressureInAtm inkPa to atm: 101325 Pa = 1 atm
+  myPressureInAtm <- myPressureInAtm / 101325
+  
+  # myPressureInAtm <- calcPressureAtAltitudeInMeters(pressure)
+  
+  myVaporPressure <- calcVP(temp, sal) # getVP(temp, sal);
+  # NB: NOT of P, too?
+  myTheta <- calcThetaForTemp(temp)      # getTheta(temp);   // NB: NOT of S, P, too?
+  
+  # cat("in GasCalc/calcO2SatForTemp,  P at", pressure," = ", myPressureInAtm, "atm\n")
+  # cat("in GasCalc/calcO2SatForTemp,  P at", pressure, " = ", myPressureInAtm * 759.999952 , "mm Hg\n")
+  # cat("in GasCalc/calcO2SatForTemp, VP at", temp, ', ', sal, ' = ', myVaporPressure, "atm\n")
+  # cat("in GasCalc/calcO2SatForTemp,  θ at", temp, " = ", myTheta, "\n")
+  
+  factor1 <- 1.0 - (myVaporPressure / myPressureInAtm)
+  factor2 <- 1.0 - myVaporPressure
+  factor3 <- 1.0 - (myTheta * myPressureInAtm)
+  factor4 <- 1.0 - myTheta
+  
+  # cat("in GasCalc/calcO2SatForTemp", myPressureInAtm, ' - ' , myVaporPressure, ' = ', myPressureInAtm - myVaporPressure, "atm\n")
+  
+  # ***** convert to μmol O2/liter (rho/1000 returns kg/l)
+  # ***** what about...pressure!? (not very compressible, alors...)
+  # ** NB: BECAUSE this O2 sat method requires input temp in Celcius and 'real' CarbCalc
+  # **     methods expect temp in Kelvin, must re-convert to K here
+  # //    myO2Sat *= [self calcRhoOfTemp:(temp+273.15) sal:sal] / 1000.0;
+  
+  # ***** convert HERE to mg O2/liter (or mg O2/kg-soln) from...mmol?
+  # ***** later, implement via units combo box
+  # //    myO2Sat *= 0.0319988;
+  #    NSLog(@"myO2Sat = %g",myO2Sat);
+  
+  myO2Sat <- myO2Sat * myPressureInAtm * (factor1 / factor2) * (factor3 / factor4)
+  
+  # cat("in GasCalc/calcO2SatForTemp, MY_O2_SAT = ", myO2Sat, "μmol/kg-SW\n")
+  
+  return(myO2Sat)
+  
+}
+
+
+# ---- Oxygen
+
+# [CHECK] calcBunsen_O2(10 + 273.15, c(10, 30, 36))
+#                   [1] 0.03580719 0.03153375 0.03035409
+#         calcBunsen_O2(28 + 273.15, c(10, 30, 36))
+#                   [1] 0.02563553 0.02292329 0.02216702
+
+calcBunsen_O2 <- function(t, sal) {
+  
+  # ** O2 coefficients
+  a1 <- -58.3877
+  a2 <-  85.8079
+  a3 <-  23.8439
+  b1 <-  -0.034892
+  b2 <-   0.015568
+  b3 <-  -0.0019387
+  
+  Tover100 <- t / 100.0
+  
+  lnbeta <- a1 + a2 / Tover100 + a3 * log(Tover100) + sal * (b1 + b2 * Tover100 + b3 * Tover100 * Tover100)
+  
+  beta <- exp(lnbeta)   # units: mL(gas)/L(water)-mbar or ~L/L-atm
+  #  beta /= 1.01325  # ** ma zašto to?
+  
+  return(beta)
+}
+
+# ---- Nitrogen
+calcBunsen_N2 <- function(t, sal) {
+  
+  # ** N2 coefficients
+  a1 <- -59.6274
+  a2 <-  85.7661
+  a3 <-  24.3696
+  b1 <-  -0.051580
+  b2 <-   0.026329
+  b3 <-  -0.0037252
+  
+  Tover100 <- t / 100.0
+  
+  lnbeta <- a1 + a2 / Tover100 + a3 * log(Tover100) + sal * (b1 + b2 * Tover100 + b3 * Tover100 * Tover100)
+  
+  beta <- exp(lnbeta)   # units: mL(gas)/L(water)-mbar or ~L/L-atm
+  #  beta /= 1.01325  # ** ma zašto to?
+  
+  return(beta)
+}
+
+# ---- Argon
+calcBunsen_Ar <- function(t, sal) {
+  
+  # ** Ar coefficients
+  a1 <- -55.6578
+  a2 <-  82.0262
+  a3 <-  22.5929
+  b1 <-  -0.036267
+  b2 <-   0.016241
+  b3 <-  -0.0020114
+  
+  Tover100 <- t / 100.0 
+  
+  lnbeta <- a1 + a2 / Tover100 + a3 * log(Tover100) + sal * (b1 + b2 * Tover100 + b3 * Tover100 * Tover100)
+  
+  beta <- exp(lnbeta)   # units: mL(gas)/L(water)-mbar or ~L/L-atm
+  #  beta /= 1.01325  # ** ma zašto to?
+  
+  return(beta)
+}
+
+
+
+
+# @n2 in I.C. Unita -- mmol/kg
+# @rho in IC Units -- g/L
+n2ToAllUnits <- function(n2, rho) {
+  
+  # g/L divided by 1000 g/kg --> kg/L
+  rho <- rho / 1000.0
+  
+  mmol_kg <- round(n2, 4)
+  mmol_L <- round(n2 * rho, 4)
+  mg_kg <- round(n2 / MW_N2, 5)
+  mg_L <- round(n2 / (MW_N2 / rho), 5)
+  
+  mmol_kg <- formatC(mmol_kg, format='f', digits=2)
+  mmol_L <- formatC(mmol_L, format='f', digits=2)
+  mg_kg <- formatC(mg_kg, format='f', digits=3)
+  mg_L <- formatC(mg_L, format='f', digits=3)
+  
+  df <- data.frame(vals = c(mg_kg, mg_L, mmol_kg, mmol_L),
+                   # units = alkUnitsList_short,
+                   units = c("mg/kg", "mg/L", 
+                             'μmol/kg', 'μmol/L', "mmol/kg", "mmol/L",
+                             'mL/L',
+                             'atm'), 
+                   # 'atm', 'mm Hg', 'torr'),
+                   
+                   # NB: ** NEED ** "stringsAsFactors = FALSE" to quell...
+                   # Warning in `[<-.factor`(`*tmp*`, idx_s, value = "<strong><i>33.00</i></strong>") :
+                   # invalid factor level, NA generated
+                   # when print
+                   stringsAsFactors = FALSE
+  )
+  
+  return(df)
+}
+
+
+# @ar in I.C. Unita -- mmol/kg
+# @rho in IC Units -- g/L
+arToAllUnits <- function(ar, rho) {
+  
+  # g/L divided by 1000 g/kg --> kg/L
+  rho <- rho / 1000.0
+  
+  mmol_kg <- round(ar, 4)
+  mmol_L <- round(ar * rho, 4)
+  mg_kg <- round(ar / MW_AR, 5)
+  mg_L <- round(ar / (MW_AR / rho), 5)
+  
+  mmol_kg <- formatC(mmol_kg, format='f', digits=2)
+  mmol_L <- formatC(mmol_L, format='f', digits=2)
+  mg_kg <- formatC(mg_kg, format='f', digits=3)
+  mg_L <- formatC(mg_L, format='f', digits=3)
+  
+  df <- data.frame(vals = c(mg_kg, mg_L, mmol_kg, mmol_L),
+                   # units = alkUnitsList_short,
+                   units = c("mg/kg", "mg/L", 
+                             "mmol/kg", "mmol/L"), 
+                   # 'atm', 'mm Hg', 'torr'),
+                   
+                   # NB: ** NEED ** "stringsAsFactors = FALSE" to quell...
+                   # Warning in `[<-.factor`(`*tmp*`, idx_s, value = "<strong><i>33.00</i></strong>") :
+                   # invalid factor level, NA generated
+                   # when print
+                   stringsAsFactors = FALSE
+  )
+  
+  return(df)
+}
+

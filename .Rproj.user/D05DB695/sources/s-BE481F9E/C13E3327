@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1496088392683.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "C13E3327",
+    "lastKnownWriteTime" : 1508695983,
+    "last_content_update" : 1508695983131,
+    "path" : "~/Documents/Documents/R Projects/WQ_iQuaCalc_Lite_0.3/server.R",
+    "project_path" : "server.R",
+    "properties" : {
+        "cursorPosition" : "7,2",
+        "docOutlineVisible" : "1",
+        "scrollLine" : "0"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

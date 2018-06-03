@@ -1,0 +1,13 @@
+name: wq_iquacalc_lite_-_vi_-_17
+title: WQ iQuaCalc Lite - VI - 17
+username:
+account: aquacalc
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 189878
+bundleId: 965079
+url: https://aquacalc.shinyapps.io/wq_iquacalc_lite_-_vi_-_17/
+when: 1504409385.50267
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: CarbCalc_no_updated_CO2_calcs.R|iQuaCalc PROBLEM with package propagate.txt|modules/uia_module_HC_2_x.R|modules/uiaXX_numeric_input_module.R|modules/wq_map_module_TEST.R|www/.DS_Store|www/CIMG0092.JPG|www/Homer Fermat.png|www/MirnaProzor.JPG|www/xFish_Length_Graphic.tiff|www/xShrimp_Length_Graphic.tiff|x_test-code/.DS_Store|x_test-code/test_change_btn_color.R|x_test-code/test_extendShinyjs.R|x_test-code/test_modal_dialog.R|x_test-code/ggplot - 2 axes and click/test_click_ggplot.R|x_test-code/ggplot - 2 axes and click/test_two_y_axes.R|x_test-code/observe and reactive work/test_numeric_and_select.R|x_test-code/observe and reactive work/test_observe_and_observeEvent.R|x_test-code/renderUI/test_length_uioutput.R|x_test-code/renderUI/test_reactive_to_renderUI.R|x_test-code/renderUI/test_reactive_uioutput.R|x_test-code/shinyStore/server.R|x_test-code/shinyStore/ui.R|x_test-code/validation/test_validation_with_dt_2.R|x_test-code/validation/test_validation_with_dt.R|x_test-code/WCH — dynamic input fields/server.r|x_test-code/WCH — dynamic input fields/ui.r

@@ -1,0 +1,1583 @@
+# WpQ Ma module functions for
+# "iQuaCalc (Lite).R"
+
+# see: http://blog.fastforwardlabs.com/2017/06/30/Places-Journal-Mississippi-Basin.html?imm_mid=0f42d5&cmp=em-data-na-na-newsltr_20170712
+# "...reducing the complexity of the real world to the most important, 
+# salient features that affect a problem, and by bringing disconnected, 
+# distant phenomena into view from a single perspective"
+
+# The point we take from Borges (and from Cheramie) is that no model can be a 
+# complete recapitulation of the real world. Instead, we bracket off parts of 
+# the world, model those parts, and use the insights it gives us to make 
+# interventions in the world. 
+
+
+
+# for extendedShinyjs()
+# see: http://deanattali.com/2015/05/31/shinyjs-extend/
+# and: x_test-code/test_extendedShinyjs.R
+jsCode <- '
+shinyjs.backgroundCol = function(params) {
+
+var defaultParams = {
+id : null,
+col : "green",
+col2 : "white"
+};
+
+params = shinyjs.getParams(params, defaultParams);
+
+var el = $("#" + params.id);
+
+el.css("background-color", params.col);
+
+el.css("color", params.col2);
+
+}'
+
+
+
+wqMapModuleInput <- function(id) {
+  
+  ns <- NS(id)
+  
+  tagList(
+    
+    fluidRow(
+      
+      extendShinyjs(text = jsCode),
+      
+      
+      # COL #1/3 Input ----
+      
+      column(width = 4,
+             
+             tabsetPanel(id = 'my_tabset_wq_map_controls', type = 'pills', selected = NULL,
+                         
+                         tabPanel('V, T, & S', value = 'wq_map_enter_t_and_s',
+                                  
+                                  fluidRow(
+                                    column(width = 12,
+                                           wellPanel(style = "padding: 5px 2px 1px 5px;",
+                                                     
+                                                     volumeNumericModuleInput(ns('volume_for_wq_map'))
+                                           )
+                                    )
+                                  ),
+                                  
+                                  fluidRow(
+                                    # T, S, pH, & Alk column
+                                    column(width = 12,
+                                                    
+                                           wellPanel(style = "padding: 5px 2px 1px 5px;",
+                                                     
+                                                     fluidRow(
+                                                       column(width = 12,
+                                                              temperatureNumericModuleInput(ns('temp_for_wq_map'))
+                                                       )
+                                                     ),
+                                                     
+                                                     fluidRow(
+                                                       column(width = 12,
+                                                              salinityNumericModuleInput(ns('sal_for_wq_map'))
+                                                       )
+                                                     )
+                                           )
+                                    )
+                                  )  # END TOP fluidRow
+                         ),   # END tabPanel 'T & S'
+                         
+                         tabPanel('Waypoints', value = 'wq_map_enter_ph_and_alk',
+                                  
+                                  fluidRow(
+                                    
+                                    column(width = 12,
+                                           
+                                           tags$div(
+                                             style="padding: 2px 8px 5px 8px; 
+                                             background-color: #F5F5F5;
+                                             border-style: solid;
+                                             border-color: #E8E8E8;
+                                             border-width: 2px;
+                                             margin-bottom: 7px",
+                                             
+                                             tags$strong(tags$h5('INITIAL pH & Alkalinity')),
+                                             
+                                             splitLayout(cellWidths = c('22%', '78%'),
+                                                         
+                                                         phNumericModuleInput(ns('ph_initial_for_wq_map')),
+                                                         
+                                                         alkInitialWpModuleInput(ns('alk_initial_for_wq_map'))
+                                             )
+                                           )
+                                    )
+                                  ),
+                                  
+                                  fluidRow(
+                                    
+                                    column(width = 12,
+                                           # padding: 5px 2px 1px 5px;
+                                           # padding: 2px 8px 5px 8px;
+                                           tags$div(
+                                             style="padding: 2px 8px 5px 8px; 
+                                             background-color: whitesmoke;
+                                             border-style: solid;
+                                             border-color: #E8E8E8;
+                                             border-width: 2px;",
+                                             
+                                             tags$strong(tags$h5('TARGET pH & Alkalinity')),
+                                             
+                                             splitLayout(cellWidths = c('22%', '78%'),
+                                                         
+                                                         phNumericModuleInput(ns('ph_final_for_wq_map')),
+                                                         
+                                                         alkTargetWpModuleInput(ns('alk_final_for_wq_map'))
+                                             )
+                                           )
+                                    )
+                                  ),  # END FINAL pH & Alk fluidRow
+                                  
+                                  hr()
+                                  
+                         ),   # tabPanel pH & Alk
+                         
+                         
+                         tabPanel(HTML(paste0('TAN & CO', tags$sub('2'))), value = 'wq_map_enter_tan_and_co2',
+                                  
+                                  fluidRow(
+                                    
+                                    column(width = 12,
+                                           
+                                           wellPanel(style = "padding: 5px 2px 1px 5px;",
+                                                     
+                                                     fluidRow(
+                                                       column(width = 12,
+                                                              tanNumericModuleInput(ns('tan_for_wq_map'))
+                                                       )
+                                                     ),
+                                                     
+                                                     fluidRow(
+                                                       column(width = 12,
+                                                              uiaNumericModuleInput(ns('uia_for_wq_map'))
+                                                       )
+                                                     )
+                                           )
+                                      
+                                    )
+                                    
+                                    #        # INSTEAD of a "tanModule/Input" module ----
+                                    #        # ...TAN input for the WQ Map only is used to draw the critical pH region within which 
+                                    #        # UIA exceeds the UIA safe-level
+                                    #        # i.e., there is no need to calc and display a full conversion table, as in tan_conversion_module.R
+                                    #        # S0 -- at least for now -- hard-code the TAN input UI here and use in the server.R
+                                    #        # to perform the necessary calcs: conversion (as needed) to I.C. units & calc of UIA-crit pH
+                                    
+                                  ),  # END TOP fluidRow
+                                  
+                                  fluidRow(
+                                    
+                                    column(width = 12,
+                                           
+                                           wellPanel(style = "padding: 5px 2px 1px 5px;",
+                                                              
+                                                     co2DissolvedNumericModuleInput(ns('co2_dissolved_for_wq_map'))
+                                           )
+                                    )
+                                  )
+                                  
+                         ),    # END tabPanel TAN & Ca
+                         
+                         tabPanel(HTML(paste0('Ca', tags$sup('++'), ' & \u03A9')), value = 'wq_map_input_calcium',
+                                  
+                                  fluidRow(
+                                    
+                                    box(width = 12, title = 'Calcium',
+                                        
+                                        caNumericModuleInput(ns('ca_for_wq_map'))
+                                    )
+                                  )
+                         )
+                         
+             ), # END tabsetPanel
+             
+             
+             fluidRow(
+               
+               column(width = 12,
+                      
+                      tabsetPanel(type = 'pills',
+                                  
+                                  tabPanel('Summary', value = 'wq_map_input_summary',
+                                           
+                                           fluidRow(
+                                             
+                                             column(width = 12,
+                                                    wellPanel(
+                                                      htmlOutput(ns('wq_map_input_echo'))
+                                                    )
+                                             )
+                                           )
+                                  ),
+                                  
+                                  tabPanel(title = 'Green Zone',
+                                           
+                                           alkGreenZoneModuleInput(ns('green_zone_alk')),
+                                           
+                                           splitLayout(cellWidths = c('80%', '20%'),
+                                                       
+                                                       sliderInput(ns('green_zone_ph'), 'pH Range',
+                                                                   min = 6.0, max = 9.0, step = 0.1,
+                                                                   value = c(6.8, 7.5)),
+                                                       
+                                                       checkboxInput(ns('tc_show_green_zone'), 'Show', value = F)
+                                           )
+                                  ),
+                                  
+                                  tabPanel(title = 'Axis Scales',
+                                           
+                                           sliderInput(ns('scale_x_axis'), 'x-Axis Scale',
+                                                       min = 0, max = 8, step = 0.1,
+                                                       value = c(0, 4)),
+                                           
+                                           sliderInput(ns('scale_y_axis'), 'y-Axis Scale',
+                                                       min = 0, max = 8, step = 0.1,
+                                                       value = c(0, 4))
+                                  )
+                                  
+                      ) # END tabsetPanel for axis scales & Green Zone
+               )
+             ) # END fluidRow for Axes sliders, Green Zone...
+             
+      ), # END column for left-side input data
+      
+      
+      # COL #2/3 WQ Map ----
+      
+      column(width = 5,
+             
+             fluidRow(
+               
+               column(width = 12, 
+                      
+                      htmlOutput(ns('wq_map_title_t_and_s')),
+                      
+                      plotOutput(ns('wq_map'), width = '100%', height = '345px')
+               )
+             ),
+               
+             fluidRow(
+               
+               column(width = 12,
+                      
+                      box(
+                        title = 'WQ Adjustment Recipe',
+                        width = '400px',
+                        solidHeader = T,
+                        background = 'light-blue',
+                        
+                        htmlOutput(ns('wq_adjustment_result'))
+                      )
+               )
+             )
+      ),  # END middle column
+      
+      
+      # COL #3/3 Reagents ----
+      
+      column(width = 3,
+             
+             fluidRow(
+               
+               column(width = 12,
+                      
+                      tabsetPanel(type = 'pills',
+                                  
+                                  tabPanel(title = 'Reagents',
+                                           
+                                           br(),
+                                           
+                                           tags$div(
+                                             radioButtons(ns('rb_adjustment'), label = 'Adjustment Calculation',
+                                                          choices = c('By Target', 'By Amount'), selected = 'By Target',
+                                                          inline = T),
+                                             
+                                             align = 'center'
+                                           ),
+                                           
+                                           uiOutput(ns('ui_reagents')),
+                                           
+                                           includeScript("www/cbToggleAntics.js"),
+                                           
+                                           tags$div(actionButton(ns('calculate_adjustment'), 
+                                                                 label = 'Calculate the Adjustment!'),
+                                                    align = 'center')
+                                           
+                                  ),
+                                  
+                                  tabPanel(title = 'Processes',
+                                           
+                                           tags$h4('Other WQ processes...', align = 'center'),
+                                           
+                                           tags$div(align = 'center',
+                                                    
+                                                    actionButton(ns('modal_feed'), "Feed Dialog", width = '200px'), br(),
+                                                    
+                                                    actionButton(ns('modal_mixing'), "Mixing Dialog", width = '200px'), br(),
+                                                    
+                                                    actionButton(ns('modal_photosynthesis'), "Photosynthesis Dialog", width = '200px')
+                                           )
+                                  ),
+                                  
+                                  tabPanel(title = 'WQ State',
+                                           
+                                           tags$h4('Waypoint table...', align = 'center')
+                                           
+                                  )  
+                      )  # END tabsetPanel for Reagent Menu & Processes
+                      
+               )
+             ),   # END top fluidRow of last column
+             
+             fluidRow(
+               
+               column(width = 12,
+                      
+                      htmlOutput(ns('wq_state'))
+               )
+             )
+             
+      )  # END last column -- tabsetPanel with Reagents & Processes
+      
+    ) # END 'master' fluidRow
+  
+  )  # END tagList
+}
+
+
+
+wqMapModule <- function(input, output, session, st) {
+  
+  
+  # "*_init" flags when app is (re-)launched ----
+  rv <- reactiveValues(select_init = -1,
+                       tan_units_default = 'mg/L TA-N',
+                       tan_sl_init = -1,
+                       duct_tape_2 = -1,
+                       tan_default = c(2, 2, 20, 20, 0.2, 0.2,
+                                       1, 1, 10, 10, 0.1, 0.1,
+                                       
+                                       2, 2, 20, 20, 0.2, 0.2,
+                                       1, 1, 10, 10, 0.1, 0.1
+                       )
+                       
+                       # duct_tape_for_plot = -1   # progress for ggplot change?
+  )
+  
+  
+  # see: https://stackoverflow.com/questions/43641103/change-color-actionbutton-shiny-r
+  rv_recalc_adjustment <- reactiveValues(
+    clicked = F
+  )
+  
+  
+  # [TEST] DIS-ABLE rb ----
+  
+  observe({
+    
+    # [KLUDGE] 
+    shinyjs::disable('rb_adjustment')
+    
+    # shinyjs::disable(session$ns('alk_final_for_wq_map'))
+    
+    # if(input$rb_adjustment == 'By Target') {
+    #   cat('PROCEED with point-to-point calculation...\n')
+    # }
+    # else{
+    #   cat('RUN -By Amount- calculation...\n')
+    # }
+    
+  })
+  
+  
+  icTemp      <- callModule(temperatureNumericModule, 'temp_for_wq_map', 
+                           reactive(st()))
+  # NB: THIS has potential to avoid the annoyingly 'immediate' validation message when first enter, 
+  #     say, "1" (an invalid temperature) quickly followed by "8" ("18" is a valid temperature)
+  # see: https://shiny.rstudio.com/reference/shiny/latest/debounce.html
+  # icTemp <- debounce(icTemp, 500, priority = 100, domain = getDefaultReactiveDomain())
+  
+  icSal       <- callModule(salinityNumericModule, 'sal_for_wq_map',
+                           reactive(icTemp()),
+                           reactive(st()))
+  
+  icPh_init   <- callModule(phNumericModule, 'ph_initial_for_wq_map',
+                           reactive(icTemp()),
+                           reactive(icSal()),
+                           reactive(st()))
+  
+  icPh_final  <- callModule(phNumericModule, 'ph_final_for_wq_map',
+                            reactive(icTemp()),
+                            reactive(icSal()),
+                            reactive(st()))
+  
+  icAlk_init  <- callModule(alkInitialWpModule, 'alk_initial_for_wq_map',
+                            reactive(icTemp()),
+                            reactive(icSal()),
+                            reactive(st()))
+
+  icAlk_final <- callModule(alkTargetWpModule, 'alk_final_for_wq_map',
+                            reactive(icAlk_init()), # provides alk units to echo by target alk
+                            reactive(icTemp()),
+                            reactive(icSal()),
+                            reactive(st()))
+  
+  icVol       <- callModule(volumeNumericModule, 'volume_for_wq_map',
+                            reactive(st()))
+  
+  # NB: Used here ONLY to return mg / L TA-N (converted to that ic value, if needed)
+  #     that value is used to calc critPh_Nbs, which then is used to define the UIA 'danger zone"
+  # so, use icTan()$ic
+  icTan       <- callModule(tanNumericModule, 'tan_for_wq_map',
+                            reactive(icTemp()),
+                            reactive(icSal()),
+                            reactive(icPh_init()), # NB: need pH for this implementation -- critPh line??
+                            reactive(st()))
+  
+  # NB: Used here ONLY to return mg/L UIA-N (converted to that ic value, if needed)
+  #     that value is used to calc critPh_Nbs, which then is used to define the UIA 'danger zone"
+  # so, use icUia()$df[9]
+  icUia       <- callModule(uiaNumericModule, 'uia_for_wq_map',
+                            reactive(icTemp()),
+                            reactive(icSal()),
+                            reactive(icPh_init()), # NB: need pH for this implementation -- critPh line??
+                            1,                     # show_tc_flag == 1
+                            reactive(st()))
+  
+  
+  icCo2_dissolved  <- callModule(co2DissolvedNumericModule, 'co2_dissolved_for_wq_map',
+                                 reactive(icTemp()),
+                                 reactive(icSal()),
+                                 reactive(icPh_init()), 
+                                 reactive(st()))
+  
+  
+  icCa             <- callModule(caNumericModule, 'ca_for_wq_map',
+                                 reactive(icTemp()),
+                                 reactive(icSal()), 
+                                 reactive(st()))
+  
+  icAlk_green_zone <- callModule(alkGreenZoneModule, 'green_zone_alk',
+                                 reactive(icTemp()),
+                                 reactive(icSal()),
+                                 reactive(st()))
+  
+  
+  # GREEN ZONE coords ----
+  green_zone_coords <- reactive({
+    
+    ph.low.nbs  <- input$green_zone_ph[1]
+    ph.high.nbs <- input$green_zone_ph[2]
+    
+    alk.low  <- icAlk_green_zone()$alk_low
+    alk.high <- icAlk_green_zone()$alk_high
+    
+    # change current ph from NBS to FREE
+    ph.low.free  <- phNbsToPhFree(ph.low.nbs,  icSal()$ic, icTemp()$ic, 0)
+    ph.high.free <- phNbsToPhFree(ph.high.nbs, icSal()$ic, icTemp()$ic, 0)
+
+    dic.1 <- 1000 * calcDicOfAlk(alk.low / 1000,  ph.high.free, icTemp()$ic, icSal()$ic)
+    dic.2 <- 1000 * calcDicOfAlk(alk.low / 1000,  ph.low.free,  icTemp()$ic, icSal()$ic)
+    dic.3 <- 1000 * calcDicOfAlk(alk.high / 1000, ph.low.free,  icTemp()$ic, icSal()$ic)
+    dic.4 <- 1000 * calcDicOfAlk(alk.high / 1000, ph.high.free, icTemp()$ic, icSal()$ic)
+
+    # # Green Zone
+    # polygon(c(dic.1,dic.2,dic.3,dic.4),c(alk.low,alk.low,alk.high,alk.high),
+    #         density=c(30, 20),col=rgb(0,1.0,0,0.7),border='darkgreen')
+    
+    gz_points <- tibble(x = c(dic.1,   dic.2,   dic.3,    dic.4,    dic.1),
+                        y = c(alk.low, alk.low, alk.high, alk.high, alk.low))
+    
+    gz_points
+    
+  })
+  
+  # observe({
+  # 
+  #   print(green_zone_coords())
+  # 
+  # })
+  
+  
+# REAGENTS MODE ----
+  
+  # see: https://shiny.rstudio.com/gallery/dynamic-ui.html
+  output$ui_reagents <- renderUI({
+      
+    # Depending on input$rb_adjustment, generate a different
+    # UI and send it to the client.
+    
+    # if('By Target' == input$rb_adjustment) {
+      
+      # cat('in wq_map_module.R/output$ui_reagents, cbChecked() ...\n')
+      # print(cbChecked())
+      # reset(session$ns("Reagents"))
+      # reset("Reagents")
+      # cat('===========================\n\n')
+      
+      # NB: prefixed id with "wq_map-", the session$ns module id...
+      tags$form(id = session$ns("Reagents"),
+      # tags$form(id = "Reagents",
+                # <center><h4>Reagent Menu</h4></center>
+                HTML("
+                     <input type=checkbox name='reagent[]' value='nahco3' id='nahco3' title='aka: baking soda or bicarbonate of soda' onClick='toggleCbs(this)'> NaHCO<sub>3</sub> (Sodium bicarbonate)<br>
+                     <INPUT TYPE=checkbox name='reagent[]' value='na2co3' id='na2co3' title='aka: soda ash or washing soda' onClick='toggleCbs(this)'> Na<sub>2</sub>CO<sub>3</sub> (Sodium carbonate)<br>
+                     <INPUT TYPE=checkbox name='reagent[]' value='naoh'   id='naoh'   title='aka: lye or caustic soda' onClick='toggleCbs(this)'> NaOH (Sodium hydroxide)<br>
+                     <br>
+                     <INPUT TYPE=checkbox name='reagent[]' value='caco3' id='caco3' onClick='toggleCbs(this)'> CaCO<sub>3</sub> (Calcium carbonate)<br>
+                     <INPUT TYPE=checkbox name='reagent[]' value='caoh2' id='caoh2' title='aka: slaked lime or hydrated lime' onClick='toggleCbs(this)'> Ca(OH)<sub>2</sub> (Calcium hydroxide)<br>
+                     <INPUT TYPE=checkbox name='reagent[]' value='cao'   id='cao'   title='aka: quicklime [sic]' onClick='toggleCbs(this)'> CaO (Calcium oxide)<br>
+                     <br>
+                     <INPUT TYPE=checkbox name='reagent[]' value='plusCo2'  id='plusCo2'  onClick='toggleCbs(this)'> +CO<sub>2</sub> (add Carbon dioxide)<br>
+                     <INPUT TYPE=checkbox name='reagent[]' value='minusCo2' id='minusCo2' onClick='toggleCbs(this)'> -CO<sub>2</sub> (de-gas Carbon dioxide)<br>
+                     <INPUT TYPE=checkbox name='reagent[]' value='hcl'      id='hcl'      onClick='toggleCbs(this)'> HCl (Muriatic acid, 31.45%w)<br>
+
+
+                     "), style = 'background-color: lightblue; padding: 5px 0px 5px 5px;'
+                # <br>
+                # <center><INPUT type=button name='adjustment' id='adjustment' value='Calculate Adjustment' onClick='fireAdjustmentCalc()'/></center>
+                )
+      
+    # } 
+    
+    # else {
+    #   
+    #   radioButtons(session$ns("dynamic"), "Dynamic",
+    #                choices = c("Option 1" = "option1",
+    #                            "Option 2" = "option2"),
+    #                selected = "option2"
+    #   )
+    # }
+    
+  })
+  
+
+# display WQ Map TITLE ----
+  
+  output$wq_map_title_t_and_s <- renderUI({
+    
+    str <- tags$strong(paste0('WQ Map for ', icTemp()$val, ' ', icTemp()$units, ' & ', 
+                              icSal()$val, ' ', icSal()$units))
+    
+    HTML(paste0(tags$h4(str, align = 'center')))
+    
+  })
+  
+  
+  # display input SUMMARY ----
+  
+  output$wq_map_input_echo <- renderUI({
+    
+    str_vol  <- tags$strong(paste0('Volume: ', icVol()$val, ' ', icVol()$units))
+    str_temp <- tags$strong(paste0('Temperature: ', icTemp()$val, ' ', icTemp()$units))
+    str_sal  <- tags$strong(paste0('Salinity: ', icSal()$val, ' ', icSal()$units))
+    str_tan  <- tags$strong(paste0('TAN: ', icTan()$val, ' ', icTan()$units))
+    
+    # HTML(paste0(tags$h4(str, align = 'center')))
+    HTML(paste0(tags$h4(str_vol), tags$h4(str_temp), tags$h4(str_sal), tags$h4(str_tan)))
+    
+  })
+  
+  
+  
+# display WQ STATE ----
+  
+  output$wq_state <- renderUI({
+    
+    if(!is.na(crit_uia_ph_line()$crit_ph_nbs))
+      str_1 <- tags$strong(paste0('critical pH for UIA: ', round(crit_uia_ph_line()$crit_ph_nbs, 2)))
+    else
+      str_1 <- tags$strong(paste0('NO critical pH for UIA: either TAN < UIA or TAN == 0'))
+    
+    HTML(paste0(tags$h4(str_1, align = 'center')))
+    
+  })
+  
+  
+# display RESULTS ----
+  
+# NB: cover case where grams much more appropriate than kg
+# NB: cover case where outside of adjustment zone -- add message
+  output$wq_adjustment_result <- renderUI({
+    
+    req(
+      adjustment_results(),
+      cancelOutput = T
+    )
+    
+    add_or_de_gas_1 <- ifelse('-CO\u2082' == adjustment_results()$cmpd[1],
+                              'De-gas ', 'Add ')
+    
+    add_or_de_gas_2 <- ifelse('-CO\u2082' == adjustment_results()$cmpd[2],
+                              'De-gas ', 'Add ')
+    
+    # convert kg to lb on-the-fly...
+    amt_1 <- adjustment_results()$amt[1]
+    amt_2 <- adjustment_results()$amt[2]
+    
+    if(amt_1 > 0 && amt_1 < 0.1) {
+      
+      # cat('amt_1 is > 0 but < 0.1\n')
+      # cat('1. in wq_adjustment_result, amt_1 = ', amt_1, '\n')
+      # cat('   so, multiply by 10^3 and report as grams...\n')
+      
+      amt_1 <- 1000.0 * amt_1
+      amt_2 <- 1000.0 * amt_2
+      
+      mass_in_lbs_1 <- round(0.0022046226 * amt_1, 2)
+      mass_in_lbs_2 <- round(0.0022046226 * amt_2, 2)
+      
+      str1 <- paste0(add_or_de_gas_1, round(amt_1, 2), 
+                     ' g (', mass_in_lbs_1,' lbs) of ', 
+                     adjustment_results()$cmpd[1])
+      
+      str2 <- paste0(add_or_de_gas_2, round(amt_2, 2), 
+                     ' g (', mass_in_lbs_2,' lbs) of ', 
+                     adjustment_results()$cmpd[2])
+      
+    } else if(amt_1 > 0 && amt_1 >= 0.1) {
+      
+      # cat('2. amt_1 is > 0 but !< 1.0 \n')
+      
+      mass_in_lbs_1 <- round(2.2046226 * amt_1, 2)
+      mass_in_lbs_2 <- round(2.2046226 * amt_2, 2)
+      
+      str1 <- paste0(add_or_de_gas_1, round(amt_1, 2), 
+                     ' kg (', mass_in_lbs_1,' lbs) of ', 
+                     adjustment_results()$cmpd[1])
+      
+      str2 <- paste0(add_or_de_gas_2, round(amt_2, 2), 
+                     ' kg (', mass_in_lbs_2,' lbs) of ', 
+                     adjustment_results()$cmpd[2])
+      
+    } else {
+      
+      # cat('3. amt_1 is !> 0... out of adjustment region...\n')
+      
+      str1 <- 'The target point is outside of the adjustment zone'
+      str2 <- 'Please change the choice of reagents to those that include the target'
+    }
+    
+
+    HTML(paste(tags$h4(str1, align = 'center'),
+               tags$h4(str2, align = 'center')))
+    
+  })
+  
+  
+# adjustment region coords ----
+  
+  adjustmentRegionCoords <- reactive({
+    
+    cbs <- cbChecked()
+    
+    # way_points() holds waypoint coords
+    initDic <- way_points()$dic_init
+    initAlk <- way_points()$alk_init
+    maxDIC  <- input$scale_x_axis[2]
+    maxALK  <- input$scale_y_axis[2]
+    
+    counter <- 0
+    
+    for(x in cbs) {
+      
+      counter <- counter + 1    # flag to limit filling Adjustment Region
+      
+      # ---- Adjustment Region ----
+      if(2 == counter) {
+        
+        myP1 <- reagent_data %>% filter(name == cbs[1]) 
+        myP2 <- reagent_data %>% filter(name == cbs[2])
+        
+        # which is DIC of 'lower' adjustment vector? (to avoid cutting off filled region)
+        p1Dic <- initDic + maxDIC * myP1$sin
+        p2Dic <- initDic + maxDIC * myP2$sin
+        
+        lowerDic <- ifelse(p1Dic < p2Dic, p1Dic, p2Dic)
+        
+        higherAlk <- ifelse(((lowerDic == initDic) && 
+                               (myP1$mRad == 3 * pi / 2 || myP2$mRad == 3 * pi / 2)),
+                            -maxALK, maxALK)
+        
+        higherRad <- max(myP1$mRad, myP2$mRad)
+        lowerRad  <- min(myP1$mRad, myP2$mRad)
+        
+        # ---- Corner-points for Adjustment Region ----
+        
+        cornerPtX <- maxDIC
+        cornerPtY <- maxALK
+        
+        if(3 * pi / 2 == higherRad && lowerRad >= pi) {
+          
+          cornerPtX <- -maxDIC
+          cornerPtY <- -maxALK
+        }
+        
+        if(pi == higherRad)
+          
+          if(lowerRad < pi) {
+            
+            cornerPtX <- -maxDIC
+            cornerPtY <-  maxALK
+          }
+        
+        
+        if(3 * pi / 2 == higherRad && lowerRad < pi) {
+          
+          cornerPtX <-  maxDIC
+          cornerPtY <- -maxALK
+        } else {
+          
+          # ADD 4-point Adjustment Region
+          #          polygon(c(initDic, initDic+maxDIC*myP1$sin, cornerPtX, initDic+maxDIC*myP2$sin),
+          #                  c(initAlk, initAlk+maxDIC*myP1$cos, cornerPtY, initAlk+maxDIC*myP2$cos),
+          #                  density=c(80, 20),
+          #                  col=rgb(255/255,255/255,153/255,0.4),
+          #                  border='yellow')
+        } 
+        
+        # temp DUMMY coords...
+        coords_x <- c(0, 0, 0, 0)
+        coords_y <- c(0, 0, 0, 0)
+      } else {
+        
+        coords_x <- c(0, 0, 0, 0)
+        coords_y <- c(0, 0, 0, 0)
+      }
+      
+      # NB: 'x' is the current reagent name in the loop
+      # myP <- reagent.df[reagent.df$name == x,]
+      # myP <- reagent_data %>% filter(name == x)
+    }
+    
+  })
+
+  
+  
+  # collect cbChecked from js script ----
+  
+  cbChecked <- reactive({
+    
+    input$checkedReagents
+  })
+  
+  
+  # adjustmentCalcs ----
+  
+  # CASE: both WQ points identical -- do not calculate adjustment
+  same_wq_points <- reactive({
+    
+    same = F
+    
+    if(way_points()$dic_init == way_points()$dic_final &&
+       way_points()$alk_init == way_points()$alk_final) {
+      
+      same = T
+    } 
+    
+    same
+    
+  })
+  
+  
+  observeEvent(c(cbChecked(), way_points(), icVol()), {
+    
+    if(same_wq_points()) {
+      
+      updateActionButton(session, 'calculate_adjustment', 
+                         label = 'WQ points are identical')
+      
+      
+      shinyjs::disable('calculate_adjustment')
+      
+      js$backgroundCol(session$ns('calculate_adjustment'), '#d3d3d3', 'black')
+      
+      return()
+    }
+    
+    
+    if(length(cbChecked()) == 2) {
+      
+      updateActionButton(session, 'calculate_adjustment', 
+                         label = 'Re-calculate the Adjustment!')
+      
+      
+      shinyjs::enable('calculate_adjustment')
+      
+      js$backgroundCol(session$ns('calculate_adjustment'), 'green', 'white')
+      
+    } else {
+      
+      updateActionButton(session, 'calculate_adjustment', 
+                         label = 'Need 2 Reagents')
+      
+      
+      shinyjs::disable('calculate_adjustment')
+      
+      js$backgroundCol(session$ns('calculate_adjustment'), '#d3d3d3', 'black')
+    }
+    
+  })
+  
+  
+  
+  # observeEvent(input$calculate_adjustment, {
+  
+  # NB: Case where pH_init == pH_final && alk_init == alk_final...
+  adjustment_results <- eventReactive(input$calculate_adjustment, {
+    
+    adjustmentRegionCoords()
+    
+    
+    my_reagent_1 <- cbChecked()[1]
+    my_reagent_2 <- cbChecked()[2]
+    
+    my_adjustment_result <- calcAdjustment(way_points()$dic_init / 1000.0,  
+                                           way_points()$alk_init / 1000.0,
+                                           
+                                           way_points()$dic_final / 1000.0, 
+                                           way_points()$alk_final / 1000.0,
+                                           
+                                           icVol()$ic,
+                                           
+                                           my_reagent_1, my_reagent_2)
+    
+    
+    # change button label, color, and disable
+    updateActionButton(session, 'calculate_adjustment', 
+                       label = 'Adjustment Calculated')
+    
+    shinyjs::disable('calculate_adjustment')
+    
+    js$backgroundCol(session$ns('calculate_adjustment'), '#d3d3d3', 'black')
+    
+    my_adjustment_result
+    
+  })
+  
+  
+  # fireAdjustmentCalculation <- reactive({
+  #   
+  #   cbChecked()
+  #   
+  #   x <- input$adjustment
+  #   y <- input$adjustmentCalculation
+  #   
+  #   cat('x = ', x, '\n')
+  #   cat('y = ', y, '\n')
+  #   
+  #   x
+  # })
+  
+  
+# echo [Alk] units for target ----
+  output$echo_alk_units <- renderUI({
+    
+    cat('Evo...output$echo_alk_units \n')
+    
+    str <- paste0(input$alk_initial_units)
+    tags$h5(str, 
+            style="padding: 35px 0px 0px 5px; 
+            margin: 0px 0px 0px 5px;")
+  })
+
+  
+# calc waypoint coords ----
+  
+  way_points <- reactive({
+    
+    # cat('icPh_init()$val = ', icPh_init()$val, ' --> icPh_init()$ic = ', icPh_init()$ic, ' (FREE) \n')
+    
+    myDics <- getInitAndFinalDic(icTemp()$ic, icSal()$ic,
+                                 icPh_init()$ic, icAlk_init()$ic,
+                                 icPh_final()$ic, icAlk_final()$ic)
+    
+    my_way_points <- tibble(dic_init  = myDics[1],
+                            alk_init  = icAlk_init()$ic,
+                            
+                            dic_final = myDics[2],
+                            alk_final = icAlk_final()$ic)
+    
+  })
+  
+  
+  
+  # calc pH isopleths ----
+  ph_family <- reactive({
+    
+    temp <- icTemp()$ic
+    sal  <- icSal()$ic
+    
+    cond         <- NULL
+    ph_slope     <- NULL
+    ph_intercept <- NULL
+    
+    # NB: base low- and high-pH range, and step on axes scales...
+    for(ph in seq(5, 12, 0.25)) {
+      
+      # change current ph from NBS to FREE
+      ph_free <- phNbsToPhFree(ph, sal, temp, 0)
+      
+      ph_intercept <- c(ph_intercept, 1000 * phLineIntercept(temp, sal, ph_free))
+      
+          ph_slope <- c(ph_slope, phLineSlope(temp, sal, ph_free))
+      
+              cond <- c(cond, ifelse(ph / as.integer(ph) == 1, 'whole', 'quarter'))
+    }
+    
+    
+    ph_isopleths <- tibble(cond         = cond, 
+                           ph_slope     = ph_slope, 
+                           ph_intercept = ph_intercept
+    )
+    
+    cat('Evo pH isopleths...\n')
+    View(ph_isopleths)
+    cat('====================\n\n')
+    
+    ph_isopleths
+    
+  })
+  
+  
+  
+  # Ω CALCULATION ----
+  # NB: pH TOTAL here?? ----
+  # see this function in omega_curve.R in file "WQ_iQuaCalc_Lite_0.3_test_code"
+  sim_omega_calcite_saturation <- function(ic_temp, ic_sal, 
+                                           ic_ca, omega_calcite = 1.0,
+                                           dic_min, dic_max) {
+    
+    dic_vec <- c()
+    alk_vec <- c()
+    
+    # dic_min  <- 0.000000
+    # dic_max  <- 0.005000
+    dic_step <- 0.00005
+    
+    tol <- 10^(-6)
+    
+    for(dic in seq(dic_min, dic_max, dic_step)) {
+      
+      ph_min <-  5.0
+      ph_max <- 14.0
+      
+      ph_test <- (ph_min + ph_max) / 2
+      
+      omega_test <- calcOmegaCa(dic, ic_ca, ic_temp, ic_sal, ph_test)
+      
+      
+      while(abs(omega_test - omega_calcite) > tol) {
+        
+        alk <- calcAlkOfDic(dic, ph_test, ic_temp, ic_sal)
+        
+        if(abs(ph_max - ph_min) < 0.001) {
+          
+          break()
+        }
+        
+        # if last calculated Ω too high, then lower pH
+        if(omega_test >= omega_calcite) {
+          
+          ph_max <- ph_test
+          
+        } else {
+          
+          ph_min <- ph_test
+        }
+        
+        ph_test <- (ph_min + ph_max) / 2
+        
+        omega_test <- calcOmegaCa(dic, ic_ca, ic_temp, ic_sal, ph_test)
+        
+      }
+      
+      alk <- calcAlkOfDic(dic, ph_test, ic_temp, ic_sal)
+      
+      dic_vec <- c(dic_vec, dic)
+      alk_vec <- c(alk_vec, alk)
+      
+    }
+    
+    dic_vec <- c(dic_vec, dic) * 10^3
+    alk_vec <- c(alk_vec, alk) * 10^3
+    
+    dic_min <- dic_min * 10^3
+    dic_max <- dic_max * 10^3
+    
+    
+    omega_ca_tbl <- tibble(dic = dic_vec,
+                           alk = alk_vec)
+    
+    
+    # ANNOTATION -- how to place it when display omega = 1...
+    min_alk     <- min(omega_ca_tbl$alk)
+    min_alk_idx <- which(omega_ca_tbl$alk == min_alk)
+    min_dic     <- omega_ca_tbl$dic[min_alk_idx]
+    delta <- dic_max - min_alk   # Use DIC_max, as alk_max set to dic_max
+    
+    min_dic_translated_idx <- min_alk_idx + 20
+    min_dic_start <- omega_ca_tbl$dic[min_dic_translated_idx]
+    min_alk_start <- omega_ca_tbl$alk[min_dic_translated_idx]
+    
+    angle <- 50  # now just a guess...
+    
+    # print(omega_ca_tbl)
+    # cat('============================ \n')
+    
+    omega_list <- list(df            = omega_ca_tbl,
+                       min_dic_start = min_dic_start,
+                       min_alk_start = min_alk_start,
+                       angle         = angle)
+    
+    
+    return(omega_list)
+    
+    # omega_ca_tbl %>% ggplot() +
+    #   
+    #   geom_line(aes(x = dic, y = alk), linetype = 'dashed', color = 'blue') +
+    #   
+    #   coord_cartesian(xlim = c(0, dic_max), 
+    #                   ylim = c(0, dic_max),
+    #                   expand = F) +
+    #   
+    #   scale_color_discrete(name = "Ω", labels = c(paste0('Ω = ', omega_calcite))) +
+    #   
+    #   annotate(geom = "text", 
+    #            x = min_dic_start, 
+    #            y = min_alk_start * 1.25, 
+    #            label = "Ω > 1", angle = 50) +
+    #   
+    #   annotate(geom = "text", 
+    #            x = min_dic_start, 
+    #            y = min_alk_start * 0.75, 
+    #            label = "Ω < 1", angle = 50)
+    
+  }
+  
+  
+  
+  
+# ---- ** RENDER WQ Map ** ----
+  
+  output$wq_map <- renderPlot({
+    
+    crit_uia_ph_line()
+    
+    # if(-1 == rv$duct_tape_for_plot) {
+    #   
+    #   progress <- shiny::Progress$new()
+    #   
+    #   on.exit(progress$close())
+    #   
+    #   progress$set(message = 'Preparing WQ Map...', value = 0)
+    #   
+    # }
+    # 
+    # rv$duct_tape_for_plot <- 2
+    
+    req(
+      icTemp()$ic >= 277.15 && icTemp()$ic <= 315
+    #   icSal(),
+    #   icPh_init(), icPh_final(),
+    #   icAlk_init(), icAlk_final()
+    )
+    
+    # define domain and range of WQ Map
+    dic_units <- 'mmol/kg'
+    dic_label <- paste0('DIC (', dic_units, ')')
+    dic_min <- input$scale_x_axis[1]
+    dic_max <- input$scale_x_axis[2]
+    
+    alk_units <- 'meq/kg'    # [TRIPLE-CHECK] 'meq/kg' or 'meq/L'
+    alk_label <- paste0('Alkalinity (', alk_units, ')')
+    alk_min <- input$scale_y_axis[1]
+    alk_max <- input$scale_y_axis[2]
+    
+    
+    wq <- tibble(dic = c(dic_min, dic_max), 
+                 alk = c(alk_min, alk_max))
+    
+    
+    # NB: FORCE origin at [0, 0]
+    # see: https://stackoverflow.com/questions/13701347/force-the-origin-to-start-at-0-in-ggplot2-r
+    # scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0))
+    p <- wq %>% 
+      
+      ggplot(mapping = aes(x = dic, y = alk)) + 
+      
+      geom_blank() + 
+      
+      coord_cartesian(xlim = c(dic_min, dic_max), 
+                      ylim = c(alk_min, alk_max),
+                      expand = F) +
+      
+      scale_x_continuous(breaks = seq(dic_min, dic_max, 0.5)) +
+      xlab(dic_label) +
+      
+      # coord_cartesian(ylim = c(alk_min, alk_max), expand = F) +
+      # SEC.AXIS ----
+    scale_y_continuous(breaks = seq(alk_min, alk_max, 0.5), 
+                       sec.axis = sec_axis(~.* icAlk_init()$scale_factor, 
+                                           name = icAlk_init()$label)) +
+      ylab(alk_label) +
+      
+      theme(legend.position = "none")
+    
+    
+    p <- p + theme(axis.title.y = element_text(size = rel(1.2), face = 'bold'),
+                   axis.title.x = element_text(size = rel(1.2), face = 'bold'))
+    
+    
+    temp <- icTemp()$ic
+    sal  <- icSal()$ic
+    
+    
+    # add pH isopleths ----
+    # see: https://stackoverflow.com/questions/17453789/change-the-colour-of-ablines-on-ggplot
+    p <- p +
+      
+      geom_abline(data = ph_family(), 
+                  aes(colour    = cond,
+                      slope     = ph_slope, 
+                      intercept = ph_intercept)) + 
+      
+      scale_colour_manual(values = c("gray", "black"))
+    
+    
+    
+    # DISPLAY GREEN ZONE ----
+    
+    if(input$tc_show_green_zone) {
+      
+      p <- p +
+        geom_polygon(data = green_zone_coords(),
+                     aes(x = x,
+                         y = y
+                     ),
+                     alpha = 0.4,
+                     fill = "darkgreen"
+        )
+      
+      # "geom_path() will join points in the original order"
+      # see: https://stackoverflow.com/questions/19020532/ggplot2-line-plot-order
+      p <- p +
+        geom_path(data = green_zone_coords(),
+                  aes(
+                    x = x,
+                    y = y
+                  ),
+                  colour = 'darkgreen'
+        )
+    }
+    
+    
+    # prep waypoints ----
+    
+    # wq_waypoints <- tibble(pt_fill    = c("green", 'yellow'),
+    wq_waypoints <- tibble(pt_fill    = c(0.13, 0.75),
+                           # wq_waypoints <- tibble(pt_fill    = c("#FFFF00", "#FFFF00"),
+                           pt_size    = c(5, 4),
+                           dic_vals   = c(way_points()$dic_init,  way_points()$dic_final),
+                           alk_vals   = c(way_points()$alk_init,  way_points()$alk_final))
+    
+    # NB: NO NEEED of following mishigas when use coord_cartesian...
+    #     see: http://rstudio-pubs-static.s3.amazonaws.com/209392_437ec4da7fa2432d831320f3591e7491.html
+    #     and  https://stackoverflow.com/questions/15494466/breaks-without-scale-y-continuous-in-ggplot2
+    
+    # to draw line segment/arrow when one of the two waypoints is beyond the WQ Map's scale...
+    # NB: are [Alk] and DIC units in I.C. or 'actual'??
+    
+    # way_point_slope <- (way_pt_alk_final - way_pt_alk_init) / (way_pt_dic_final - way_pt_dic_init)
+    # way_point_y_int <- way_pt_alk_init - way_point_slope * way_pt_dic_init
+    
+    
+    # add waypoints ----
+    # see: https://stackoverflow.com/questions/10437442/place-a-border-around-points
+    # see: https://stackoverflow.com/questions/19506630/control-point-border-thickness-in-ggplot
+    p <- p +
+      
+      geom_point(data = wq_waypoints,
+                 aes(x       = dic_vals,
+                     y       = alk_vals,
+                     # fill    = c('black', 'yellow')),
+                     fill    = pt_fill),
+                 colour      = c('yellow', 'black'),
+                 size        = wq_waypoints$pt_size,
+                 pch         = 21,
+                 stroke      = 2)
+    
+    # + scale_fill_manual(values=c("#CC6666", "#9999CC"))
+    # + scale_fill_manual(values = c("gray", "black"))
+    
+    
+    # connect waypoints ----
+    
+    p <- p +
+      geom_path(data = wq_waypoints,
+                aes(x       = dic_vals,
+                    y       = alk_vals
+                ), 
+                arrow=arrow(length = unit(0.15, "cm")),
+                colour = "black", size = 1)
+    
+    
+    # DISPLAY UIA region ----
+    
+    # NB: if crit_ph_nbs == NA, then either TAN = 0 or TAN < UIA...
+    #     SHOW A MESSAGE IN LOWER RIGHT PANEL ??
+    if(icUia()$show_uia_zone && !is.na(crit_uia_ph_line()$crit_ph_nbs)) {
+      
+      # rs <- data.frame(x = -Inf, y = Inf)
+      # # my_data <- rbind(rs, c(-Inf, -Inf), c(1, -Inf))
+      # my_data <- rbind(rs, c(0, icTemp()$val / 8), c(2.2, Inf))
+      
+      uia_region_coords <- tibble(
+        
+        x = c(0, 
+              0,  
+              (alk_max - crit_uia_ph_line()$ph_intercept) / crit_uia_ph_line()$ph_slope),
+        
+        y = c(crit_uia_ph_line()$ph_intercept, 
+              alk_max, 
+              alk_max)
+      )
+      
+      
+      p <- p + 
+        geom_polygon(data = uia_region_coords, 
+                     aes(x = x, y = y), 
+                     alpha = 0.1, 
+                     fill = "red")
+      
+      
+      p <- p +
+        
+        geom_abline(data        = crit_uia_ph_line(), 
+                    aes(
+                      slope     = ph_slope, 
+                      intercept = ph_intercept
+                    ),
+                    
+                    colour    = 'red'
+                    # alpha     = 0.3
+        )
+      
+    }
+    
+    
+    # DISPLAY CO2 region----
+    
+    if(icCo2_dissolved()$show_co2_zone) {
+      
+      p <- p + 
+        geom_polygon(data = icCo2_dissolved()$df, 
+                     aes(x = x, 
+                         y = y
+                     ), 
+                     alpha = 0.1, 
+                     fill = "red"
+        )
+      
+      p <- p + 
+        geom_line(data = icCo2_dissolved()$df,
+                  aes(
+                    x = x,
+                    y = y
+                  ),
+                  colour = 'red'
+        )
+    }
+    
+    
+    # DISPLAY OMEGA region(s)----
+    
+    if(icCa()$show_omega_ca_zone) {
+      
+        # cat('State of Omega Checkbos = ...\n')
+        # 
+        # print(icCa())
+        
+        omega_data <- sim_omega_calcite_saturation(icTemp()$ic, icSal()$ic, 
+                                                   icCa()$ic, omega_calcite = 1.0,
+                                                   0.00000, 0.00800)
+      
+        
+        p <- p + 
+          
+          geom_line(data  = omega_data$df, 
+                    aes(x = dic, 
+                        y = alk), 
+                    linetype = 'dashed', 
+                    color    = 'blue',
+                    size     = 1.15) +
+          
+          # scale_color_discrete(name = "Ω", labels = c(paste0('Ω = ', omega_calcite))) +
+
+          annotate(geom = "text",
+                   x = omega_data$min_dic_start,
+                   y = omega_data$min_alk_start * 1.25,
+                   label = "Ω > 1", fontface = 2, size = 4,
+                   angle = omega_data$angle) +
+
+          annotate(geom = "text",
+                   x = omega_data$min_dic_start,
+                   y = omega_data$min_alk_start * 0.75,
+                   label = "Ω < 1", fontface = 2, size = 4,
+                   angle = omega_data$angle)
+
+    }
+
+
+    # if(icCa()$show_omega_ar_zone) {
+    # 
+    # }
+    
+    
+    
+    # DISPLAY adjustments ----
+    
+    my_reagents <- cbChecked()
+    
+    myP <- reagent_data %>% filter(name %in% my_reagents)
+    
+    # when choose HCl and a first-quadrant reagent, extend this fill-region coord
+    dic_max_plus <- dic_max * 10
+    
+    # my_reagent_coords <- tibble(dic_vals = c(way_points()$dic_init, 
+    #                                          way_points()$dic_init + dic_max * myP$sin),
+    #                             alk_vals = c(way_points()$alk_init, 
+    #                                          way_points()$alk_init + dic_max * myP$cos)
+    # )
+    
+    
+    if(2 == length(cbChecked())) {
+      
+      third_dic_coord <- ifelse('minusCo2' %in% my_reagents, -Inf, Inf)
+      
+      third_alk_coord <- ifelse('hcl' %in% my_reagents, -Inf, Inf)
+      
+      adjustment_region_coords <- tibble(
+        
+        x = c(way_points()$dic_init, 
+              way_points()$dic_init + dic_max_plus * myP$sin[2], 
+              third_dic_coord, 
+              way_points()$dic_init + dic_max_plus * myP$sin[1]),
+        
+        y = c(way_points()$alk_init, 
+              way_points()$alk_init + dic_max_plus * myP$cos[2], 
+              third_alk_coord, 
+              way_points()$alk_init + dic_max_plus * myP$cos[1])
+      )
+      
+      p <- p + 
+        geom_polygon(data = adjustment_region_coords, 
+                     aes(x = x, y = y), 
+                     alpha = 0.2, 
+                     fill = "yellow")
+      
+      
+      p <- p +
+        geom_path(aes(x       = c(way_points()$dic_init, 
+                                  way_points()$dic_init + dic_max_plus * myP$sin[2]),
+                      y       = c(way_points()$alk_init, 
+                                  way_points()$alk_init + dic_max_plus * myP$cos[2])
+        ), 
+        
+        colour = "#9b870c", size = 1)
+    }
+    
+    
+    if(length(cbChecked() != 0)) {
+      
+      p <- p +
+        geom_path(aes(x       = c(way_points()$dic_init, 
+                                  way_points()$dic_init + dic_max_plus * myP$sin[1]),
+                      y       = c(way_points()$alk_init, 
+                                  way_points()$alk_init + dic_max_plus * myP$cos[1])
+        ), 
+        
+        colour = "#9b870c", size = 1)
+    }
+    
+    p
+    
+  })
+  
+  
+  # ---- Critical TAN Zone ----
+  
+  # percentNh3 <- percentNh3ForTemp(icTemp(), icSal(), initPhFREE)
+  # 
+  # # if cbNh3 checked, display critical NH3 region
+  # if(input$cbNh3) {
+  #   
+  #   # user's measured TAN
+  #   myTan <- input$tan
+  #   
+  #   # user's critical (not-to-exceed) UN-ionized ammonia (UIA*)
+  #   myUia <- input$unIonAmm / 1000.0
+  #   
+  #   # critical pH (FREE), not to be exceeded for given TAN, UIA*, temp, & sal
+  #   z2 <- critPhFreeForTanMillero(input$tan, input$unIonAmm / 1000, icTemp(), icSal())
+  #   
+  #   #critPhNh3TOT <- z2 - log10(ahFreeToTotFactor(input$salInPpt, temp, 0))
+  #   # critical pH (NBS)
+  #   critPhNh3SWS <- z2 - log10(ahFreeToSwsFactor(icSal(), icTemp(), 0))
+  #   critPhNh3NBS <- critPhNh3SWS - log10(ahSwsToNbsFactor(icSal(), icTemp(), 0))
+  #   
+  #   # crit [Alk] for LL DI & crit pH (FREE) for UIA*
+  #   
+  #   # adjust LL & UL to fill UIA* region
+  #   justATad <- 0.2
+  #   uia.LL <- dic.LL - justATad
+  #   uia.UL <- dic.UL + justATad
+  #   
+  #   critAlkMilleroLL <- calcAlkOfDicPhTempSal(uia.LL / 1000.0, z2, icTemp(), icSal())
+  #   
+  #   critAlkMilleroUL <- calcAlkOfDicPhTempSal(uia.UL / 1000.0, z2, icTemp(), icSal())
+  #   
+  #   segments(uia.LL, 
+  #            1000 * critAlkMilleroLL,
+  #            uia.UL, 
+  #            1000 * critAlkMilleroUL,
+  #            col = 'red', 
+  #            lwd = 1)
+  #   
+  #   polygon(
+  #     c(uia.LL,                uia.UL,                uia.UL,      uia.LL),
+  #     c(1000 * critAlkMilleroLL, 1000 * critAlkMilleroUL, maxALK,      maxALK),
+  #     density = c(80, 20),
+  #     col = rgb(255/255, 0/255, 0/255, 0.4), 
+  #     border = 'red')
+  #   
+  # }
+  
+  
+  # CRIT UIA pH, m, & b ----
+  
+  crit_uia_ph_line <- reactive({
+    
+    # crit_ic <- tanToIcUnits(input$critTanVal, input$critTanUnits, ic_rho, uia_posto)
+    # crit_df <- tanToAllUnits(crit_ic, ic_rho, uia_posto, 6, 6) # NB: '6' dec_places, '6' num_digits
+    
+    
+    # cat('        icTemp()$ic = ', icTemp()$ic, ' K \n')
+    # cat('         icSal()$ic = ', icSal()$ic, ' ppt \n\n')
+    # 
+    # cat('            icTan()$ic = ', icTan()$ic, ' mg/L TA-N \n')
+    # cat('           entered TAN = ', icTan()$val, ' ', icTan()$units, ' \n')
+    
+    tan_in_mg_kg <- as.numeric(icTan()$df$TAN[2])
+    # cat('       tan_in_mg_kg = ', tan_in_mg_kg, ' mg/kg TA-N \n\n')
+    
+    uia_crit_in_mg_liter <- as.numeric(icUia()$df$UIAN[1])
+    uia_crit_in_mg_kg    <- as.numeric(icUia()$df$UIAN[2])
+    
+    # cat(' uia_crit_in_mg_liter = ', uia_crit_in_mg_liter, ' mg/L UIA-N\n')
+    # cat('    uia_crit_in_mg_kg = ', uia_crit_in_mg_kg, ' mg/kg UIA-N\\nn')
+    # 
+    # cat('(entered UIA --> ', icUia()$val, ' ', icUia()$units, ') \n\n')
+    # 
+    # cat('calculate critical pH (NBS) for T, S, TAN, & UIA-crit...\n')
+    
+    if(tan_in_mg_kg > uia_crit_in_mg_kg) {
+      
+      critPh_FREE <- critPhFreeForTanMillero(tan_in_mg_kg, uia_crit_in_mg_kg, 
+                                             icTemp()$ic, icSal()$ic)
+      
+      # critPh_FREE <- critPhFreeForTanMillero(tan_mg_kg, crit_mg_kg_uia_N, temp, sal)
+      # cat('Does critPh_FREE have correct tan & crit_tan units (mg/kg *-N)??', critPh_FREE, '\n')
+      
+      critPh_NBS <- critPh_FREE - log10(ahFreeToSwsFactor(icSal()$ic, icTemp()$ic, 0)) -
+        log10(ahSwsToNbsFactor(icSal()$ic, icTemp()$ic, 0))
+      
+      
+      ph_free <- phNbsToPhFree(critPh_NBS, icSal()$ic, icTemp()$ic, 0)
+      
+      # cat('critPh_FREE = ', critPh_FREE, '\n')
+      # cat(' critPh_NBS = ', critPh_NBS, '\n')
+      # cat('    ph_free = ', ph_free, '\n')
+      
+      ph_intercept <- 1000 * phLineIntercept(icTemp()$ic, icSal()$ic, ph_free)
+      
+      ph_slope <- phLineSlope(icTemp()$ic, icSal()$ic, ph_free)
+      
+      
+      critPh_NBS <- round(critPh_NBS, 6)
+      
+      # cat('\n==============================\n')
+      # cat(' ph_intercept = ', ph_intercept, '...\n')
+      # cat('     ph_slope = ', ph_slope, '...\n')
+      # cat('...critPh_NBS = ', critPh_NBS, '...\n\n')
+      # 
+      # cat('----------------------------\n\n')
+      
+      crit_ph_uia_data <- tibble(crit_ph_nbs  = critPh_NBS,
+                                 ph_slope     = ph_slope, 
+                                 ph_intercept = ph_intercept)
+      
+    } else {
+      
+      # if TAN = 0 or TAN <= UIA, then SHOW NOT UIA REGION
+      cat('*****VALIDATION: TAN measurement must be > critical UIA, eh?')
+      
+      # NB: MUST show message...
+      # req(tan_in_mg_kg > uia_crit_in_mg_kg,
+      #     cancelOutput = T)
+      
+      crit_ph_uia_data <- tibble(crit_ph_nbs  = NA,   # flag to show message?
+                                 ph_slope     = 0, 
+                                 ph_intercept = 0)
+      
+    }
+    
+    
+  })
+  
+  
+  
+  
+  # [TEST] MODAL DIALOGUEs ----
+
+  # feed ----
+  # see: modal_dlgs/modal_dlg_feed.R
+  
+  
+  observeEvent(input$modal_feed, {
+    
+    showModal(modal_feed_ui())
+  })
+  
+  observeEvent(input$modal_mixing, {
+    
+    showModal(modalDialog(
+      
+      title = 'Mixing Dialogue',
+      
+      '...Under Construction...'
+    ))
+    
+  })
+  
+  observeEvent(input$modal_photosynthesis, {
+    
+    showModal(modalDialog(
+      
+      title = 'Photosynthesis Dialogue',
+      
+      '...Under Construction...'
+    ))
+    
+  })
+  
+}

@@ -1,0 +1,10 @@
+name: WQ_iQuaCalc_Lite
+account: aquacalc
+server: shinyapps.io
+appId: 122751
+bundleId: 549376
+url: https://aquacalc.shinyapps.io/WQ_iQuaCalc_Lite/
+when: 1473111590.94954
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: www/Homer Fermat.png

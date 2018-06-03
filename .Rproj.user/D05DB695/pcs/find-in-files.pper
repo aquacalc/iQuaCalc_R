@@ -1,0 +1,10 @@
+{
+    "dialog-state" : {
+        "caseSensitive" : false,
+        "filePatterns" : [
+        ],
+        "path" : "~/Documents/Documents/R Projects/WQ_iQuaCalc_Lite_0.3",
+        "query" : "htmlOutput",
+        "regex" : false
+    }
+}
